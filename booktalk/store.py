@@ -30,8 +30,8 @@ class BookStore:
 
     def __init__(self) -> None:
         self.client = QdrantClient(path=str(config.INDEX_DIR))
-        self.embedder = SentenceTransformer(config.EMBED_MODEL)
-        self.reranker = CrossEncoder(config.RERANK_MODEL)
+        self.embedder = SentenceTransformer(config.EMBED_MODEL, device=config.MODEL_DEVICE)
+        self.reranker = CrossEncoder(config.RERANK_MODEL, device=config.MODEL_DEVICE)
         self._ensure_collection()
 
     def _ensure_collection(self) -> None:
@@ -133,7 +133,15 @@ class BookStore:
             hits = [h for h in hits if (h.payload or {}).get("book") == book]
         if not hits:
             return []
-        pairs = [(question, h.payload["text"]) for h in hits]
+        # 重排器在 CPU 上很慢（长文本逐条算，30 条要 20+ 秒）：只对最靠前的少量候选重排，
+        # 且每条只喂前 RERANK_MAX_CHARS 字（判断相关性够用），把「插嘴」首响压到几秒。
+        hits = hits[: config.RERANK_CANDIDATES]
+
+        def _short(s: str) -> str:
+            s = (s or "").strip()
+            return s if len(s) <= config.RERANK_MAX_CHARS else s[: config.RERANK_MAX_CHARS]
+
+        pairs = [(question, _short(h.payload["text"])) for h in hits]
         scores = self.reranker.predict(pairs)
         ranked = sorted(zip(hits, scores), key=lambda x: -float(x[1]))
         return [
