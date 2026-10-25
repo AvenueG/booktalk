@@ -291,6 +291,7 @@
   #podcast-status { flex: 1; min-width: 110px; color: var(--text); }
   #podcast-bar select, #podcast-bar button { border: 1px solid var(--border); background: var(--seg-bg); color: var(--text); font-size: 12px; padding: 4px 10px; border-radius: 8px; cursor: pointer; }
   #podcast-bar button:hover { border-color: var(--accent); color: var(--accent); }
+  #podcast-auto.on { color: #fff; background: var(--accent); border-color: var(--accent); }
   #podcast-audio { height: 34px; flex: 1; min-width: 160px; }
   #podcast-options { display: none; padding: 10px 14px; border-top: 1px solid var(--border); background: var(--panel); font-size: 13px; color: var(--muted); }
   #podcast-options.show { display: block; }
@@ -442,6 +443,7 @@
       <button id="podcast-make">生成</button>
       <audio id="podcast-audio" controls style="display:none"></audio>
       <button id="podcast-interrupt" style="display:none" title="插嘴：暂停播客，你说话，两位主播答你，然后继续播">🎤 插嘴</button>
+      <button id="podcast-auto" style="display:none" title="自动插嘴：播客播放时保持监听，你一开口就暂停回答（建议戴耳机，避免麦克风收到播客声）">🎧 自动插嘴</button>
       <button id="podcast-download" style="display:none">下载 mp3</button>
       <button id="podcast-close">✕</button>
     </div>
@@ -506,6 +508,14 @@
         <button data-mode="dark" title="暗夜">🌙</button>
         <button data-mode="flash" title="手电筒">🔦</button>
       </div>
+    </div>
+    <div class="settings-sec">
+      <div class="settings-label">朗读音色（书 AI）</div>
+      <select id="read-voice" title="聊天回答朗读用的音色，跟两位主播区分开">
+        <option value="zh-CN-YunjianNeural">男声 · 云健</option>
+        <option value="zh-CN-XiaoyiNeural">女声 · 晓伊</option>
+        <option value="zh-CN-XiaoxiaoNeural">女声 · 晓晓（同小晓）</option>
+      </select>
     </div>
   </div>
 </div>
@@ -1190,9 +1200,12 @@
     if (p) $('persona-select').value = p;
     const d = localStorage.getItem('bt-depth');
     if (d) $('depth-select').value = d;
+    const v = localStorage.getItem('bt-read-voice');
+    if (v) { readVoice = v; $('read-voice').value = v; }
   }
   $('persona-select').addEventListener('change', () => { try { localStorage.setItem('bt-persona', $('persona-select').value); } catch (e) {} });
   $('depth-select').addEventListener('change', () => { try { localStorage.setItem('bt-depth', $('depth-select').value); } catch (e) {} });
+  $('read-voice').addEventListener('change', () => { readVoice = $('read-voice').value; try { localStorage.setItem('bt-read-voice', readVoice); } catch (e) {} });
 
   // ---------- 思考动画 ----------
   const THINK_STAGES = ['正在检索书里相关内容…', '正在思考…', '正在组织语言…'];
@@ -1619,6 +1632,8 @@
   let speaking = false, speakingEl = null;
   let audioSeq = 0;
   let curAudio = null;
+  // 朗读音色：默认男声「云健」，跟播客两位主播（小晓女声/小宇男声）区分开
+  let readVoice = 'zh-CN-YunjianNeural';
 
   function speechText(s) {
     return String(s || '')
@@ -1653,7 +1668,7 @@
     try {
       const res = await fetch('/api/tts', {
         method: 'POST', headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({ text: clean })
+        body: JSON.stringify({ text: clean, voice: readVoice })
       });
       if (!res.ok) throw new Error('tts ' + res.status);
       const blob = await res.blob();
@@ -1738,7 +1753,7 @@
             const a = $('podcast-audio');
             a.src = url; a.style.display = '';
             podcastScript = it.script || '';
-            $('podcast-download').style.display = ''; $('podcast-interrupt').style.display = '';
+            $('podcast-download').style.display = ''; $('podcast-interrupt').style.display = ''; $('podcast-auto').style.display = '';
             setPodcastStatus('就绪 · ' + (it.title || ''));
             a.play().catch(() => {});
           };
@@ -1774,6 +1789,8 @@
     $('podcast-audio').style.display = 'none';
     $('podcast-download').style.display = 'none';
     $('podcast-interrupt').style.display = 'none';
+    $('podcast-auto').style.display = 'none';
+    disarmPodcastListen();
     try {
       setPodcastStatus('① 写脚本…');
       const res = await fetch('/api/podcast?book=' + encodeURIComponent(currentBook), {
@@ -1797,6 +1814,7 @@
       audio.style.display = '';
       $('podcast-download').style.display = '';
       $('podcast-interrupt').style.display = '';
+      $('podcast-auto').style.display = '';
       setPodcastStatus('就绪 · 已存入播客库');
       $('podcast-download').onclick = () => {
         const a = document.createElement('a');
@@ -1816,6 +1834,7 @@
     const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
     if (!SR) { toast('语音插嘴需要 Chrome / Edge'); return; }
     main.pause();
+    disarmPodcastListen();   // 手动插嘴时停掉自动监听，避免两个麦克风同时开
     stopSpeak();
     setPodcastStatus('你说，我听着…');
     const r = new SR();
@@ -1877,10 +1896,38 @@
     const pos = Math.floor(frac * podcastScript.length);
     return podcastScript.slice(Math.max(0, pos - 180), pos).replace(/\s+/g, ' ').trim();
   }
+  // 按句续播：把脚本按句切分，用字符比例近似每句在音频里的位置（同一音色语速大致恒定）。
+  // 返回每句「开始位置比例」(0..1) 的升序数组。
+  function podcastSentenceStarts(script) {
+    const flat = (script || '')
+      .split('\n')
+      .map(l => l.replace(/^(?:小晓|晓晓|小A|A|主播A|小宇|宇宇|小B|B|主播B)[：:]\s*/, '').trim())
+      .filter(Boolean)
+      .join('');
+    if (!flat) return [];
+    const sents = flat.match(/[^。！？；!?;]+[。！？；!?;]?/g) || [flat];
+    const total = flat.length || 1;
+    const starts = [];
+    let acc = 0;
+    for (const s of sents) { starts.push(acc / total); acc += s.length; }
+    return starts;
+  }
+  // 当前播放位置所在的句子的「句首时间」，用来续播（而不是硬回退 8 秒）。
+  function sentenceResumeTime(main) {
+    const dur = main.duration || 0;
+    const t = main.currentTime || 0;
+    if (!dur || !podcastScript) return Math.max(0, t - 8);
+    const frac = Math.min(1, Math.max(0, t / dur));
+    const starts = podcastSentenceStarts(podcastScript);
+    if (!starts.length) return 0;
+    let cur = 0;
+    for (const s of starts) { if (s <= frac + 1e-9) cur = s; else break; }
+    return cur * dur;
+  }
   async function podcastAnswer(q, main) {
     setPodcastStatus('主播在想…');
-    // 回退 8 秒续播，并把「刚才播到哪」带过去，让主播精确接回（而非泛泛「接着聊」）
-    const resumeAt = Math.max(0, (main.currentTime || 0) - 8);
+    // 按句续播：回到「正在播的那一句」的句首，而不是硬回退 8 秒
+    const resumeAt = sentenceResumeTime(main);
     const context = podcastContextAt(main);
     try {
       const r = await fetch('/api/podcast/answer/stream?book=' + encodeURIComponent(currentBook), {
@@ -1942,6 +1989,68 @@
       setPodcastStatus('失败：' + e.message);
       resumePodcast(main, resumeAt);
     }
+  }
+
+  // ---------- 全程插嘴（自动监听）：播客播放时保持「听」循环，一开口就暂停并回答 ----------
+  let podcastAutoOn = false;      // 用户是否开了「自动插嘴」
+  let podcastListening = false;   // 当前是否有一个听写循环在跑
+  let podRec = null;
+  function podcastPlaying() {
+    const a = $('podcast-audio');
+    return !!a.src && !a.paused;
+  }
+  function disarmPodcastListen() {
+    podcastListening = false;
+    if (podRec) { try { podRec.onresult = podRec.onend = podRec.onerror = null; podRec.stop(); } catch (e) {} podRec = null; }
+  }
+  function armPodcastListen() {
+    const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SR || !podcastAutoOn || !podcastPlaying() || podcastListening) return;
+    const main = $('podcast-audio');
+    const r = new SR();
+    podRec = r;
+    podcastListening = true;
+    r.lang = 'zh-CN'; r.interimResults = true; r.continuous = false; r.maxAlternatives = 1;
+    let heard = false, text = '';
+    r.onresult = (e) => {
+      let final = '', interim = '';
+      for (let i = e.resultIndex; i < e.results.length; i++) {
+        const rr = e.results[i];
+        if (rr.isFinal) final += rr[0].transcript; else interim += rr[0].transcript;
+      }
+      const t = (final || interim).trim();
+      if (t) {
+        if (!heard) { heard = true; main.pause(); setPodcastStatus('听到了，主播准备接…'); }
+        text = t;
+      }
+    };
+    r.onend = () => {
+      podcastListening = false; podRec = null;
+      if (heard && text) {
+        podcastAnswer(text, main);               // 回答完 resumePodcast 会重新武装
+      } else if (podcastAutoOn && podcastPlaying()) {
+        armPodcastListen();                       // 没听到就继续听
+      }
+    };
+    r.onerror = (e) => {
+      const code = e && e.error;
+      if (code === 'not-allowed' || code === 'service-not-allowed') {
+        setPodcastAuto(false);
+        toast('麦克风权限被拒，自动插嘴已关闭');
+      } else if (code !== 'no-speech' && code !== 'aborted') {
+        setPodcastAuto(false);                    // network 等：停掉，别无限重试
+        micHint(sttErrText(code));
+      }
+      // no-speech / aborted 不在这里重新武装：onend 一定会紧随其后触发，交给它统一处理，避免重复监听
+    };
+    try { r.start(); } catch (e) { podcastListening = false; podRec = null; }
+  }
+  function setPodcastAuto(on) {
+    podcastAutoOn = on;
+    const b = $('podcast-auto');
+    b.classList.toggle('on', on);
+    b.textContent = on ? '🎧 自动插嘴中' : '🎧 自动插嘴';
+    if (on) { armPodcastListen(); } else { disarmPodcastListen(); }
   }
 
   // 听写（STT）：点麦克风 = 随时插嘴 —— 立刻打断 AI 讲话，说完自动发送
@@ -2051,8 +2160,12 @@
   });
   $('podcast-ch-list').addEventListener('change', updatePodcastChCount);
   $('podcast-interrupt').addEventListener('click', podcastInterrupt);
+  $('podcast-auto').addEventListener('click', () => setPodcastAuto(!podcastAutoOn));
+  $('podcast-audio').addEventListener('play', () => { if (podcastAutoOn) armPodcastListen(); });
+  $('podcast-audio').addEventListener('ended', () => { disarmPodcastListen(); });
   $('podcast-close').addEventListener('click', () => {
     $('podcast-audio').pause();
+    disarmPodcastListen();
     $('podcast-bar').classList.remove('show');
     $('podcast-options').classList.remove('show');
     $('podcast-library').classList.remove('show');
