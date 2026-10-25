@@ -286,6 +286,10 @@
   #send:disabled { opacity: .5; cursor: default; }
   #mic { border: 1px solid var(--border); background: var(--panel); color: var(--text); width: 42px; border-radius: 20px; font-size: 16px; cursor: pointer; flex: none; }
   #mic.listening { background: #d9433f; color: #fff; border-color: #d9433f; animation: pulse 1.2s infinite; }
+  #rec-indicator { display: none; align-items: center; gap: 6px; padding: 5px 11px; border-radius: 999px; border: 1px solid rgba(255, 149, 0, .45); background: rgba(255, 149, 0, .14); color: #ff9500; font-size: 12px; font-weight: 600; letter-spacing: .3px; white-space: nowrap; }
+  #rec-indicator.on { display: inline-flex; }
+  #rec-indicator .dot { width: 7px; height: 7px; border-radius: 50%; background: #ff9500; animation: recPulse 1.3s infinite; }
+  @keyframes recPulse { 0%, 100% { box-shadow: 0 0 0 0 rgba(255, 149, 0, .5); } 50% { box-shadow: 0 0 0 6px rgba(255, 149, 0, 0); } }
   #podcast-bar { display: none; align-items: center; gap: 8px; padding: 8px 14px; border-top: 1px solid var(--border); background: var(--panel); font-size: 13px; color: var(--muted); flex-wrap: wrap; }
   #podcast-bar.show { display: flex; }
   #podcast-status { flex: 1; min-width: 110px; color: var(--text); }
@@ -399,6 +403,7 @@
       </div>
       <button id="podcast" title="双人播客：读完全书后生成一段两个主播的对谈音频">🎙️ 播客</button>
       <button id="settings-btn" title="设置：API Key / 人设 / 深度 / 显示模式">⚙️ 设置</button>
+      <div id="rec-indicator" title="麦克风正在录音"><span class="dot"></span>录音中</div>
     </div>
     <div id="messages"></div>
     <div id="podcast-options">
@@ -1846,9 +1851,9 @@
       txt = txt.trim();
       if (txt) { got = true; podcastAnswer(txt, main); }
     };
-    r.onend = () => { if (!got) { setPodcastStatus('没听清，继续播'); main.play().catch(() => {}); } };
-    r.onerror = () => { if (!got) { setPodcastStatus('没听清，继续播'); main.play().catch(() => {}); } };
-    try { r.start(); } catch (e) { setPodcastStatus('麦克风不可用'); main.play().catch(() => {}); return; }
+    r.onend = () => { manualPodcastListening = false; refreshRecIndicator(); if (!got) { setPodcastStatus('没听清，继续播'); main.play().catch(() => {}); } };
+    r.onerror = () => { manualPodcastListening = false; refreshRecIndicator(); if (!got) { setPodcastStatus('没听清，继续播'); main.play().catch(() => {}); } };
+    try { r.start(); manualPodcastListening = true; refreshRecIndicator(); } catch (e) { setPodcastStatus('麦克风不可用'); main.play().catch(() => {}); return; }
     setTimeout(() => { try { r.stop(); } catch (e) {} }, 12000);
   }
   function _podcastTurns(script) {
@@ -1995,6 +2000,13 @@
   let podcastAutoOn = false;      // 用户是否开了「自动插嘴」
   let podcastListening = false;   // 当前是否有一个听写循环在跑
   let podRec = null;
+  let micOn = false;              // 聊天 🎤 是否在听
+  let manualPodcastListening = false;  // 手动插嘴的临时监听
+  function refreshRecIndicator() {
+    // 汇总所有麦克风状态：只要有一个在录音，右上角就亮「录音中」（对标 macOS 菜单栏橙色录音灯）
+    const on = micOn || podcastListening || manualPodcastListening;
+    $('rec-indicator').classList.toggle('on', on);
+  }
   function podcastPlaying() {
     const a = $('podcast-audio');
     return !!a.src && !a.paused;
@@ -2002,6 +2014,7 @@
   function disarmPodcastListen() {
     podcastListening = false;
     if (podRec) { try { podRec.onresult = podRec.onend = podRec.onerror = null; podRec.stop(); } catch (e) {} podRec = null; }
+    refreshRecIndicator();
   }
   function armPodcastListen() {
     const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
@@ -2010,6 +2023,7 @@
     const r = new SR();
     podRec = r;
     podcastListening = true;
+    refreshRecIndicator();
     r.lang = 'zh-CN'; r.interimResults = true; r.continuous = false; r.maxAlternatives = 1;
     let heard = false, text = '';
     r.onresult = (e) => {
@@ -2026,6 +2040,7 @@
     };
     r.onend = () => {
       podcastListening = false; podRec = null;
+      refreshRecIndicator();
       if (heard && text) {
         podcastAnswer(text, main);               // 回答完 resumePodcast 会重新武装
       } else if (podcastAutoOn && podcastPlaying()) {
@@ -2043,7 +2058,7 @@
       }
       // no-speech / aborted 不在这里重新武装：onend 一定会紧随其后触发，交给它统一处理，避免重复监听
     };
-    try { r.start(); } catch (e) { podcastListening = false; podRec = null; }
+    try { r.start(); } catch (e) { podcastListening = false; podRec = null; refreshRecIndicator(); }
   }
   function setPodcastAuto(on) {
     podcastAutoOn = on;
@@ -2124,6 +2139,8 @@
     const b = $('mic');
     b.classList.toggle('listening', on);
     b.textContent = on ? '🔴' : '🎤';
+    micOn = on;
+    refreshRecIndicator();
   }
   $('mic').addEventListener('click', () => {
     if (!rec) return;
