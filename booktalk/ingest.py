@@ -4,6 +4,9 @@
     python -m booktalk.ingest [--reset] path/to/book.pdf
     --reset 先清空旧索引，只保留这本新书（换书用）。
     支持 pdf / epub / md / txt（docling 还能处理 docx/html 等）。
+
+网页端通过 booktalk.web 的 /api/import 直接调 import_book（复用运行中的 BookStore，
+避免 Qdrant 单进程锁冲突）。
 """
 from __future__ import annotations
 
@@ -62,6 +65,37 @@ def _convert_to_markdown(path: Path) -> str:
     return result.document.export_to_markdown()
 
 
+def import_book(
+    path: str | Path,
+    book: str | None = None,
+    reset: bool = False,
+    store: BookStore | None = None,
+) -> int:
+    """导入一本书：解析 -> 写 markdown -> 分块 -> 写向量库。返回写入的块数。
+
+    book 默认取文件名 stem，作为全应用里的「书 id」（markdown 文件名、索引 book 字段、笔记/会话文件名）。
+    store 可复用外部已持有的 BookStore（网页端在运行中的进程里导入时传进来，
+    避免重复打开 Qdrant 单进程锁）；为 None 时新建（CLI 用）。
+    """
+    path = Path(path)
+    if not path.exists():
+        raise FileNotFoundError(f"文件不存在: {path}")
+    book = book or path.stem
+
+    config.BOOKS_DIR.mkdir(parents=True, exist_ok=True)
+    config.INDEX_DIR.mkdir(parents=True, exist_ok=True)
+
+    markdown = _convert_to_markdown(path)
+    config.MARKDOWN_DIR.mkdir(parents=True, exist_ok=True)
+    (config.MARKDOWN_DIR / f"{book}.md").write_text(markdown, encoding="utf-8")
+
+    chunks = _split_by_headings(markdown, path.name)
+    store = store or BookStore()
+    if reset:
+        store.clear()
+    return store.add_chunks(chunks, book=book)
+
+
 def main() -> int:
     reset = "--reset" in sys.argv[1:]
     args = [a for a in sys.argv[1:] if a != "--reset"]
@@ -73,18 +107,12 @@ def main() -> int:
         print(f"文件不存在: {path}")
         return 1
 
-    config.BOOKS_DIR.mkdir(parents=True, exist_ok=True)
-    config.INDEX_DIR.mkdir(parents=True, exist_ok=True)
-
     print(f"解析 {path.name} …（首次会下载 Docling 解析模型）")
-    markdown = _convert_to_markdown(path)
-    chunks = _split_by_headings(markdown, path.name)
-    print(f"切出 {len(chunks)} 块，写入向量库 …（首次会下载 bge-m3 / 重排模型）")
-    store = BookStore()
-    if reset:
-        store.clear()
-        print("已清空旧索引，只保留这本新书。")
-    n = store.add_chunks(chunks)
+    try:
+        n = import_book(path, reset=reset)
+    except FileNotFoundError as e:
+        print(e)
+        return 1
     print(f"完成，已写入 {n} 块。现在运行 python -m booktalk.chat 提问。")
     return 0
 

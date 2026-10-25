@@ -20,6 +20,10 @@ DEEPSEEK_MODEL = os.getenv("DEEPSEEK_MODEL", "deepseek-chat")
 
 BOOKS_DIR = REPO_ROOT / "data" / "books"
 INDEX_DIR = REPO_ROOT / "data" / "index"
+MARKDOWN_DIR = REPO_ROOT / "data" / "markdown"
+NOTES_DIR = REPO_ROOT / "data" / "notes"
+SESSION_DIR = REPO_ROOT / "data" / "session"
+KEYPOINTS_DIR = REPO_ROOT / "data" / "keypoints"
 
 # RAG 参数
 EMBED_MODEL = os.getenv("EMBED_MODEL", "BAAI/bge-m3")
