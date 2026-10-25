@@ -1,0 +1,5 @@
+docling>=2
+python-dotenv>=1.0
+openai>=1.40
+sentence-transformers>=3.0
+qdrant-client>=1.9
