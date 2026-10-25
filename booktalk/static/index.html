@@ -358,6 +358,7 @@
   let msgSeq = 0;
   let pendingParentId = null; // 追问目标（某条 assistant 消息的 id）
   let pendingQuote = '';      // 追问选中的句子
+  let askAbort = null;        // 当前正在进行的提问（切书时取消，避免答案串到新书）
   let podcastOn = loadJSON('bt-podcast', false) === true;
   let keyOn = loadJSON('bt-key', false) === true;
   let keyData = null;         // 当前书的中心句 {paragraphs:[{key:[句子下标]}]}
@@ -561,6 +562,7 @@
   }
   async function switchBook(name) {
     if (!name || name === currentBook) return;
+    if (askAbort) askAbort.abort();   // 取消旧书还没答完的问题，避免答案串到新书
     await saveSession();              // 存当前书的会话
     if (vditor) saveNotes(false);     // 存当前书的笔记
     stopSpeak();
@@ -860,6 +862,7 @@
   async function ask(q, parentId) {
     q = (q || '').trim();
     if (!q) return;
+    const book = currentBook;                    // 记住这问属于哪本书，切书后据此作废
     stopSpeak();                                // 每次新提问都打断正在进行的语音/播客
     hideWelcome();
     const pid = parentId == null ? pendingParentId : parentId;   // 追问目标
@@ -880,11 +883,15 @@
 
     const btn = $('send'); btn.disabled = true; const old = btn.textContent; btn.textContent = '…';
     const thinkingEl = addThinking();
+    if (askAbort) askAbort.abort();             // 同一本书内连续提问，取消上一问
+    const ac = new AbortController();
+    askAbort = ac;
     let msgEl = null, sources = [], answerText = '', thinkingDone = false;
     try {
       const res = await fetch('/api/ask/stream', {
         method: 'POST', headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({ question: q, persona, depth, history, book: currentBook })
+        body: JSON.stringify({ question: q, persona, depth, history, book }),
+        signal: ac.signal
       });
       if (!res.ok || !res.body) throw new Error('HTTP ' + res.status);
       const reader = res.body.getReader();
@@ -913,6 +920,7 @@
         }
       }
       if (!thinkingDone) { removeThinking(thinkingEl); thinkingDone = true; }
+      if (currentBook !== book) return;          // 切书了：这条回答作废，不写入任何书
       if (!msgEl) msgEl = addMsg('assistant', answerText || '（没有回答）', sources, q, { parentId: userNode.parentId });
       sessionNodes.push({ id: Number(msgEl.dataset.id), role: 'assistant', content: answerText, parentId: userNode.parentId, question: q, sources });
       if (sessionNodes.length > 200) sessionNodes = sessionNodes.slice(-200);
@@ -923,10 +931,12 @@
         speak(answerText, null, () => podcastContinue(tok));
       }
     } catch (err) {
+      if (ac.signal.aborted) return;            // 被切书/连续提问取消，静默退出
       removeThinking(thinkingEl);
       if (msgEl) updateMsgAnswer(msgEl, answerText + '\n\n（请求失败：' + err + '）');
       else addMsg('assistant', '请求失败：' + err, null, null, { parentId: userNode.parentId });
     } finally {
+      if (askAbort === ac) askAbort = null;
       btn.disabled = false; btn.textContent = old;
     }
   }
