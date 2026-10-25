@@ -1,7 +1,7 @@
 """向量库 + 嵌入 + 重排（本地，Qdrant path 模式，单机单用户）。"""
 from __future__ import annotations
 
-import hashlib
+import uuid
 from dataclasses import dataclass
 
 from qdrant_client import QdrantClient, models
@@ -22,7 +22,7 @@ class Chunk:
     @property
     def chunk_id(self) -> str:
         raw = f"{self.source}|{self.heading}|{self.text[:200]}"
-        return hashlib.sha1(raw.encode("utf-8")).hexdigest()
+        return str(uuid.uuid5(uuid.NAMESPACE_URL, raw))
 
 
 class BookStore:
@@ -64,6 +64,11 @@ class BookStore:
         ]
         self.client.upsert(collection_name=config.COLLECTION, points=points)
         return len(points)
+
+    def clear(self) -> None:
+        """清空整本书的索引（换书时用）。"""
+        self.client.delete_collection(collection_name=config.COLLECTION)
+        self._ensure_collection()
 
     def search(self, question: str, top_k: int | None = None) -> list[dict]:
         top_k = top_k or config.TOP_K_FINAL

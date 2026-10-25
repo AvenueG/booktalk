@@ -6,3 +6,4 @@ venv/
 data/index/
 data/books/
 .DS_Store
+*.log

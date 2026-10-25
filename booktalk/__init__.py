@@ -5,3 +5,10 @@
 """
 
 __version__ = "0.1.0"
+
+import os
+
+# 必须最先设置：huggingface_hub 在 import 时就会读取并锁定 HF_ENDPOINT，
+# 所以要在任何会 import 它的库（docling / sentence-transformers）之前设好。
+# 部分地区连不上 huggingface.co，默认走镜像；可用环境变量覆盖。
+os.environ.setdefault("HF_ENDPOINT", "https://hf-mirror.com")

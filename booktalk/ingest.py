@@ -1,7 +1,8 @@
 """导入一本书：Docling 解析 -> 按章节分块 -> 写向量库。
 
 用法：
-    python -m booktalk.ingest path/to/book.pdf
+    python -m booktalk.ingest [--reset] path/to/book.pdf
+    --reset 先清空旧索引，只保留这本新书（换书用）。
     支持 pdf / epub / md / txt（docling 还能处理 docx/html 等）。
 """
 from __future__ import annotations
@@ -49,17 +50,25 @@ def _split_by_headings(markdown: str, source: str) -> list[Chunk]:
     return chunks
 
 
+_TEXT_EXTS = {".md", ".markdown", ".txt", ".text"}
+
+
 def _convert_to_markdown(path: Path) -> str:
+    # 纯文本/标记文件直接读，不必走 Docling（省得下载解析模型）
+    if path.suffix.lower() in _TEXT_EXTS:
+        return path.read_text(encoding="utf-8")
     converter = DocumentConverter()
     result = converter.convert(str(path))
     return result.document.export_to_markdown()
 
 
 def main() -> int:
-    if len(sys.argv) < 2:
-        print("用法: python -m booktalk.ingest <书文件.pdf|.epub|.md|.txt>")
+    reset = "--reset" in sys.argv[1:]
+    args = [a for a in sys.argv[1:] if a != "--reset"]
+    if not args:
+        print("用法: python -m booktalk.ingest [--reset] <书文件.pdf|.epub|.md|.txt>")
         return 1
-    path = Path(sys.argv[1])
+    path = Path(args[0])
     if not path.exists():
         print(f"文件不存在: {path}")
         return 1
@@ -72,6 +81,9 @@ def main() -> int:
     chunks = _split_by_headings(markdown, path.name)
     print(f"切出 {len(chunks)} 块，写入向量库 …（首次会下载 bge-m3 / 重排模型）")
     store = BookStore()
+    if reset:
+        store.clear()
+        print("已清空旧索引，只保留这本新书。")
     n = store.add_chunks(chunks)
     print(f"完成，已写入 {n} 块。现在运行 python -m booktalk.chat 提问。")
     return 0
