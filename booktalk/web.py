@@ -10,6 +10,7 @@ import asyncio
 import json
 import os
 import re
+import secrets
 import shutil
 import tempfile
 from pathlib import Path
@@ -182,6 +183,12 @@ class GuideRequest(BaseModel):
 
 class SettingsRequest(BaseModel):
     api_key: str = ""
+    invite_code: str | None = None   # None=不改；""=清除（关闭门禁）；其它=设置
+
+
+class AuthRequest(BaseModel):
+    invite_code: str = ""
+    api_key: str = ""
 
 
 # ---------- 页面 ----------
@@ -199,22 +206,78 @@ def personas() -> list[dict]:
 # ---------- 设置 ----------
 @app.get("/api/settings")
 def get_settings() -> dict:
-    """返回当前配置状态；不回传明文 key，只给 has_key。"""
+    """返回当前配置状态；不回传明文 key / 邀请码，只给布尔。"""
     return {
         "has_key": bool(config.get_deepseek_key()),
+        "has_invite_code": bool(config.get_invite_code()),
         "model": config.DEEPSEEK_MODEL,
         "base_url": config.DEEPSEEK_BASE_URL,
     }
 
 
 @app.post("/api/settings")
-def save_settings(req: SettingsRequest) -> dict:
-    """网页「设置」面板里保存 API key（覆盖 .env，持久化到 data/config.json）。"""
-    key = (req.api_key or "").strip()
-    if not key:
-        return {"ok": False, "error": "API key 不能为空"}
-    config.set_api_key(key)
-    return {"ok": True, "has_key": True}
+def save_settings(request: Request, req: SettingsRequest) -> dict:
+    """网页「设置」面板里保存 API key / 邀请码（覆盖 .env，持久化到 data/config.json）。"""
+    _require_owner(request)  # 门禁开启后，只有书主（持邀请码）能改服务器设置
+    if (req.api_key or "").strip():
+        config.set_api_key(req.api_key.strip())
+    if req.invite_code is not None:
+        config.set_invite_code(req.invite_code)
+    return {
+        "ok": True,
+        "has_key": bool(config.get_deepseek_key()),
+        "has_invite_code": bool(config.get_invite_code()),
+    }
+
+
+# ---------- 访问门禁（邀请码 / 自带 Key）----------
+def _require_owner(request: Request) -> None:
+    """只有书主（持邀请码）能改服务器设置。门禁未开启时不设限。"""
+    invite_code = config.get_invite_code()
+    if not invite_code:
+        return
+    sent = (request.headers.get("X-BookTalk-Invite") or "").strip()
+    if sent and secrets.compare_digest(sent, invite_code):
+        return
+    raise HTTPException(status_code=403, detail="只有书主能修改服务器设置")
+
+
+def _require_api_key(request: Request) -> str | None:
+    """返回本次请求该用的 DeepSeek key（None = 用服务器默认 key）；未授权则抛 401。
+
+    门禁关闭（没设邀请码）时不鉴权，返回 None，脑层走 config 里的 key（本地单机行为不变）。
+    门禁开启后二选一：
+    - X-BookTalk-Invite 头：邀请码匹配 → 用服务器 key（书主出钱），返回 None。
+    - X-BookTalk-Key 头：访客自带 key → 返回这个 key（访客自己出钱）。
+    """
+    invite_code = config.get_invite_code()
+    if not invite_code:
+        return None
+    sent = (request.headers.get("X-BookTalk-Invite") or "").strip()
+    if sent and secrets.compare_digest(sent, invite_code):
+        if not config.get_deepseek_key():
+            raise HTTPException(status_code=503, detail="书主还没配置 API Key")
+        return None
+    own = (request.headers.get("X-BookTalk-Key") or "").strip()
+    if own:
+        return own
+    raise HTTPException(status_code=401, detail="需要邀请码或自己的 API Key")
+
+
+@app.post("/api/auth")
+def auth(req: AuthRequest) -> dict:
+    """解锁门禁：邀请码或自带 Key，二选一。"""
+    invite_code = config.get_invite_code()
+    if (req.invite_code or "").strip():
+        if not invite_code:
+            return {"ok": False, "error": "书主没有设置邀请码"}
+        if secrets.compare_digest(req.invite_code.strip(), invite_code):
+            return {"ok": True, "mode": "invite"}
+        return {"ok": False, "error": "邀请码不对"}
+    own = (req.api_key or "").strip()
+    if own:
+        return {"ok": True, "mode": "byok"}
+    return {"ok": False, "error": "请输入邀请码或 API Key"}
 
 
 # ---------- 书 ----------
@@ -342,13 +405,14 @@ def _ask_chunks(req: AskRequest, store: BookStore) -> list[dict]:
 
 
 @app.post("/api/ask")
-def ask(req: AskRequest) -> dict:
+def ask(request: Request, req: AskRequest) -> dict:
+    api_key = _require_api_key(request)
     store = get_store()
     chunks = _ask_chunks(req, store)
     if not chunks:
         return {"answer": "没有检索到相关内容，先确认书已经导入。", "sources": []}
     persona = load_persona(req.persona)
-    text = answer(req.question, chunks, persona=persona, depth=req.depth)
+    text = answer(req.question, chunks, persona=persona, depth=req.depth, api_key=api_key)
     sources = [
         {
             "source": c.get("source"),
@@ -362,7 +426,8 @@ def ask(req: AskRequest) -> dict:
 
 
 @app.post("/api/ask/stream")
-def ask_stream(req: AskRequest) -> StreamingResponse:
+def ask_stream(request: Request, req: AskRequest) -> StreamingResponse:
+    api_key = _require_api_key(request)
     store = get_store()
     chunks = _ask_chunks(req, store)
     sources = [
@@ -382,7 +447,7 @@ def ask_stream(req: AskRequest) -> StreamingResponse:
             yield json.dumps({"type": "delta", "text": "没有检索到相关内容，先确认书已经导入。"}, ensure_ascii=False) + "\n"
         else:
             try:
-                for delta in stream_answer(req.question, chunks, history=req.history, persona=persona, depth=req.depth):
+                for delta in stream_answer(req.question, chunks, history=req.history, persona=persona, depth=req.depth, api_key=api_key):
                     yield json.dumps({"type": "delta", "text": delta}, ensure_ascii=False) + "\n"
             except Exception as e:
                 yield json.dumps({"type": "delta", "text": f"\n\n（出错了：{e}）"}, ensure_ascii=False) + "\n"
@@ -392,8 +457,9 @@ def ask_stream(req: AskRequest) -> StreamingResponse:
 
 
 @app.post("/api/continue")
-def continue_talk(req: ContinueRequest) -> dict:
+def continue_talk(request: Request, req: ContinueRequest) -> dict:
     # 播客续讲：顺着上一轮自然往下聊（不提问、不等用户），给 2-4 句。
+    api_key = _require_api_key(request)
     query = ""
     for m in reversed(req.history):
         if m.get("role") in ("user", "assistant"):
@@ -420,7 +486,7 @@ def continue_talk(req: ContinueRequest) -> dict:
     if not chunks:
         return {"text": ""}
     persona = load_persona(req.persona)
-    text = answer(instruction, chunks, history=req.history, persona=persona, depth=req.depth)
+    text = answer(instruction, chunks, history=req.history, persona=persona, depth=req.depth, api_key=api_key)
     return {"text": text}
 
 
@@ -493,13 +559,14 @@ async def stt(request: Request) -> dict:
 
 # ---------- 跟着读（主动阅读循环：节奏 / 主动回忆 / 复盘） ----------
 @app.post("/api/guide")
-def guide_route(req: GuideRequest) -> StreamingResponse:
+def guide_route(request: Request, req: GuideRequest) -> StreamingResponse:
+    api_key = _require_api_key(request)
     persona = load_persona(req.persona)
 
     def gen():
         try:
             for delta in guide_stream(
-                req.context, req.heading, req.mode, req.question, req.answer, persona=persona
+                req.context, req.heading, req.mode, req.question, req.answer, persona=persona, api_key=api_key
             ):
                 yield json.dumps({"type": "delta", "text": delta}, ensure_ascii=False) + "\n"
         except Exception as e:  # noqa: BLE001
@@ -511,7 +578,8 @@ def guide_route(req: GuideRequest) -> StreamingResponse:
 
 # ---------- 推荐问题 ----------
 @app.post("/api/suggest")
-def suggest_questions(req: SuggestRequest) -> dict:
+def suggest_questions(request: Request, req: SuggestRequest) -> dict:
+    api_key = _require_api_key(request)
     persona = load_persona(req.persona)
     if req.seed:
         book_name = req.book or _first_book()
@@ -523,7 +591,7 @@ def suggest_questions(req: SuggestRequest) -> dict:
         chunks = get_store().search(req.question, book=req.book or None)[:3]
     if not chunks:
         return {"questions": []}
-    qs = suggest(req.question, req.answer, chunks, persona=persona, seed=req.seed)
+    qs = suggest(req.question, req.answer, chunks, persona=persona, seed=req.seed, api_key=api_key)
     return {"questions": qs}
 
 
@@ -623,13 +691,14 @@ def save_notes(req: NotesRequest, book: str = "") -> dict:
 
 
 @app.post("/api/notes/organize")
-def organize(req: OrganizeRequest, book: str = "") -> dict:
+def organize(request: Request, req: OrganizeRequest, book: str = "") -> dict:
     """一键整理：按章节归位 + 溯源 + 保留上下文，返回整理后的 Markdown。"""
+    api_key = _require_api_key(request)
     book = book or _first_book()
     if not book:
         return {"ok": False, "error": "还没有导入书"}
     try:
-        content = organize_notes(book, req.content or "", _headings(book), req.progress or "")
+        content = organize_notes(book, req.content or "", _headings(book), req.progress or "", api_key=api_key)
         return {"ok": True, "content": content}
     except Exception as e:  # noqa: BLE001
         return {"ok": False, "error": str(e)}
@@ -741,8 +810,9 @@ def _podcast_key(length: str, fmt: str, chapters: list[str], instructions: str) 
 
 
 @app.post("/api/podcast")
-def podcast_route(req: PodcastRequest, book: str = "") -> dict:
+def podcast_route(request: Request, req: PodcastRequest, book: str = "") -> dict:
     """生成播客脚本（唯一花 API 的步骤；脚本按书+参数缓存，重放不花钱）。"""
+    api_key = _require_api_key(request)
     book = book or _first_book()
     if not book:
         return {"ok": False, "error": "还没有导入书"}
@@ -763,7 +833,7 @@ def podcast_route(req: PodcastRequest, book: str = "") -> dict:
         cache = {}
     try:
         outline = _book_outline(book, chapters or None)
-        script = podcast_script(book, outline, length, format=fmt, instructions=instructions)
+        script = podcast_script(book, outline, length, format=fmt, instructions=instructions, api_key=api_key)
         cache_dir.mkdir(parents=True, exist_ok=True)
         cache[key] = {"script": script}
         cache_path.write_text(json.dumps(cache, ensure_ascii=False), encoding="utf-8")
@@ -872,8 +942,9 @@ def podcast_delete(pid: str) -> dict:
 
 
 @app.post("/api/podcast/answer")
-def podcast_answer_route(req: PodcastAnswerRequest, book: str = "") -> dict:
+def podcast_answer_route(request: Request, req: PodcastAnswerRequest, book: str = "") -> dict:
     """插嘴：两位主播针对用户的问题，基于书里内容给一段 2-3 轮对白。"""
+    api_key = _require_api_key(request)
     book = book or _first_book()
     if not book:
         return {"ok": False, "error": "还没有导入书"}
@@ -881,18 +952,19 @@ def podcast_answer_route(req: PodcastAnswerRequest, book: str = "") -> dict:
     if not chunks:
         return {"ok": False, "error": "没检索到相关内容"}
     try:
-        script = podcast_answer(req.question, chunks, req.context or "")
+        script = podcast_answer(req.question, chunks, req.context or "", api_key=api_key)
         return {"ok": True, "script": script}
     except Exception as e:  # noqa: BLE001
         return {"ok": False, "error": str(e)}
 
 
 @app.post("/api/podcast/answer/stream")
-def podcast_answer_stream(req: PodcastAnswerRequest, book: str = "") -> StreamingResponse:
+def podcast_answer_stream(request: Request, req: PodcastAnswerRequest, book: str = "") -> StreamingResponse:
     """插嘴（流式）：边生成边按「轮」吐 NDJSON，前端第一句好了就合成播放，压低首响延迟。
 
     事件：{"type":"turn","v":"小晓：","t":"…"}，最后 {"type":"done"}；出错 {"type":"error","error":"…"}。
     """
+    api_key = _require_api_key(request)
     book = book or _first_book()
     chunks = get_store().search(req.question, book=book or None) if book else []
 
@@ -903,7 +975,7 @@ def podcast_answer_stream(req: PodcastAnswerRequest, book: str = "") -> Streamin
             yield json.dumps({"type": "error", "error": "没检索到相关内容"}, ensure_ascii=False) + "\n"
         else:
             try:
-                for voice, text in stream_podcast_answer(req.question, chunks, req.context or ""):
+                for voice, text in stream_podcast_answer(req.question, chunks, req.context or "", api_key=api_key):
                     yield json.dumps({"type": "turn", "v": voice, "t": text}, ensure_ascii=False) + "\n"
             except Exception as e:  # noqa: BLE001
                 yield json.dumps({"type": "error", "error": str(e)}, ensure_ascii=False) + "\n"

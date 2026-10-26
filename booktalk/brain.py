@@ -17,8 +17,11 @@ _client: OpenAI | None = None
 _client_key: str | None = None
 
 
-def _get_client() -> OpenAI:
+def _get_client(api_key: str | None = None) -> OpenAI:
     global _client, _client_key
+    if api_key:
+        # 自带 key（BYOK）：每个请求独立建客户端，不污染缓存的服务器 key
+        return OpenAI(api_key=api_key, base_url=config.DEEPSEEK_BASE_URL)
     key = config.get_deepseek_key()
     # key 变了就重建客户端（网页设置里改 key 后，下一次请求生效）
     if _client is None or _client_key != key:
@@ -124,10 +127,11 @@ def answer(
     history: list[dict] | None = None,
     persona: dict | None = None,
     depth: str = "standard",
+    api_key: str | None = None,
 ) -> str:
     persona = persona or load_persona(config.PERSONA)
     messages = _build_messages(question, chunks, history, persona, depth)
-    client = _get_client()
+    client = _get_client(api_key)
     resp = client.chat.completions.create(
         model=config.DEEPSEEK_MODEL, messages=messages, temperature=0.7
     )
@@ -140,11 +144,12 @@ def stream_answer(
     history: list[dict] | None = None,
     persona: dict | None = None,
     depth: str = "standard",
+    api_key: str | None = None,
 ):
     """流式回答：逐个产出文本增量（OpenAI 兼容 stream 接口），供前端逐字渲染。"""
     persona = persona or load_persona(config.PERSONA)
     messages = _build_messages(question, chunks, history, persona, depth)
-    client = _get_client()
+    client = _get_client(api_key)
     resp = client.chat.completions.create(
         model=config.DEEPSEEK_MODEL, messages=messages, temperature=0.7, stream=True
     )
@@ -162,6 +167,7 @@ def suggest(
     chunks: list[dict],
     persona: dict | None = None,
     seed: bool = False,
+    api_key: str | None = None,
 ) -> list[str]:
     """生成一组「接着问」的好问题：seed=True 给开场问题，否则给追问。
 
@@ -169,7 +175,7 @@ def suggest(
     """
     persona = persona or load_persona(config.PERSONA)
     system = _system_prompt(persona)
-    client = _get_client()
+    client = _get_client(api_key)
     context = _format_chunks(chunks)
     if seed:
         task = (
@@ -241,6 +247,7 @@ def guide_stream(
     question: str = "",
     answer: str = "",
     persona: dict | None = None,
+    api_key: str | None = None,
 ):
     """「跟着读」主动循环的流式回答。
 
@@ -257,7 +264,7 @@ def guide_stream(
         parts.append("【你之前问的问题】" + (question or ""))
         parts.append("【他的回答】" + (answer or "（没回答）"))
     user = "\n\n".join(parts)
-    client = _get_client()
+    client = _get_client(api_key)
     resp = client.chat.completions.create(
         model=config.DEEPSEEK_MODEL,
         messages=[
@@ -293,6 +300,7 @@ def organize_notes(
     notes: str,
     headings: list[str],
     progress_summary: str = "",
+    api_key: str | None = None,
 ) -> str:
     """把零散笔记整理成「按章节归位 + 溯源 + 上下文」的结构化 Markdown（一次性调用）。"""
     toc = "\n".join("- " + h for h in (headings or [])[:80]) or "（无目录）"
@@ -302,7 +310,7 @@ def organize_notes(
         f"【阅读进度】{progress_summary or '（未知）'}\n\n"
         f"【待整理的笔记】\n{notes or '（还没有笔记）'}"
     )
-    client = _get_client()
+    client = _get_client(api_key)
     resp = client.chat.completions.create(
         model=config.DEEPSEEK_MODEL,
         messages=[
@@ -391,6 +399,7 @@ def podcast_script(
     length: str = "medium",
     format: str = "deep",
     instructions: str = "",
+    api_key: str | None = None,
 ) -> str:
     """把提纲写成播客对白脚本（一次性调用，这是整个播客唯一花 API 的地方）。
 
@@ -408,7 +417,7 @@ def podcast_script(
             + instructions.strip()
         )
     user = f"【书名】{book_title}\n\n【提纲】\n{outline}\n\n【时长】{want}，请按这个长度写。"
-    client = _get_client()
+    client = _get_client(api_key)
     resp = client.chat.completions.create(
         model=config.DEEPSEEK_MODEL,
         messages=[
@@ -437,12 +446,12 @@ def _podcast_answer_system(context: str) -> str:
     return system
 
 
-def podcast_answer(question: str, chunks: list[dict], context: str = "") -> str:
+def podcast_answer(question: str, chunks: list[dict], context: str = "", api_key: str | None = None) -> str:
     """两位主播简短回答用户的「插嘴」，答完自然把话题接回节目（一次性调用）。"""
     book_text = _format_chunks(chunks)
     system = _podcast_answer_system(context)
     user = f"【书本文段】\n{book_text}\n\n【用户插嘴】{question}"
-    client = _get_client()
+    client = _get_client(api_key)
     resp = client.chat.completions.create(
         model=config.DEEPSEEK_MODEL,
         messages=[
@@ -487,7 +496,7 @@ def _split_turns(text: str) -> list[tuple[str, str]]:
     return turns
 
 
-def stream_podcast_answer(question: str, chunks: list[dict], context: str = ""):
+def stream_podcast_answer(question: str, chunks: list[dict], context: str = "", api_key: str | None = None):
     """流式版插嘴回答：把「小晓：/小宇：」对白按「轮」逐条产出，供前端边合成边播放，压首响延迟。
 
     模型有 0.8 温度、偶尔会不按「小晓：」前缀出牌，导致一轮都切不出来（前端会静音）。
@@ -496,7 +505,7 @@ def stream_podcast_answer(question: str, chunks: list[dict], context: str = ""):
     system = _podcast_answer_system(context)
     book_text = _format_chunks(chunks)
     user = f"【书本文段】\n{book_text}\n\n【用户插嘴】{question}"
-    client = _get_client()
+    client = _get_client(api_key)
     resp = client.chat.completions.create(
         model=config.DEEPSEEK_MODEL,
         messages=[
@@ -546,6 +555,6 @@ def stream_podcast_answer(question: str, chunks: list[dict], context: str = ""):
         yielded += 1
     if yielded == 0:
         # 流式一次都没切出「主播：」轮，退回一次性调用兜底（保证有声音，而非静音后直接接回）
-        fallback = podcast_answer(question, chunks, context)
+        fallback = podcast_answer(question, chunks, context, api_key=api_key)
         for voice, t in _split_turns(fallback):
             yield voice, t

@@ -327,6 +327,20 @@
   #settings-panel .settings-actions { display: flex; justify-content: flex-end; margin-top: 8px; }
   #settings-panel .settings-actions button { border: 1px solid var(--border); background: var(--accent); color: #fff; font-size: 13px; padding: 6px 14px; border-radius: 8px; cursor: pointer; }
   #settings-panel .settings-hint { font-size: 11.5px; color: var(--muted); margin-top: 8px; line-height: 1.5; }
+  #auth-overlay { position: fixed; inset: 0; z-index: 300; display: none; align-items: center; justify-content: center; background: rgba(0,0,0,.5); animation: fade-in .2s var(--ease-out); }
+  #auth-panel { width: min(420px, 92vw); max-height: 86vh; overflow-y: auto; background: var(--panel); border: 1px solid var(--border); border-radius: 14px; box-shadow: 0 12px 40px rgba(0,0,0,.3); padding: 18px; animation: pop-in .26s var(--ease-spring); }
+  #auth-head { margin-bottom: 6px; }
+  #auth-title { font-size: 16px; font-weight: 700; color: var(--text); }
+  #auth-sub { font-size: 12px; color: var(--muted); margin-top: 4px; }
+  .auth-divider { display: flex; align-items: center; gap: 10px; color: var(--muted); font-size: 12px; margin: 12px 0; }
+  .auth-divider::before, .auth-divider::after { content: ''; flex: 1; height: 1px; background: var(--border); }
+  #auth-panel .settings-sec { margin: 14px 0; }
+  #auth-panel .settings-label { font-size: 12px; color: var(--muted); margin-bottom: 6px; }
+  #auth-panel input[type=password] { width: 100%; box-sizing: border-box; padding: 8px 10px; border: 1px solid var(--border); border-radius: 8px; background: var(--bg); color: var(--text); font-size: 13px; }
+  #auth-panel .settings-actions { display: flex; justify-content: flex-end; margin-top: 8px; }
+  #auth-panel .settings-actions button { border: 1px solid var(--border); background: var(--accent); color: #fff; font-size: 13px; padding: 6px 14px; border-radius: 8px; cursor: pointer; }
+  #auth-panel .settings-hint { font-size: 11.5px; color: var(--muted); margin-top: 10px; line-height: 1.5; }
+  #auth-err { color: #d97706; font-size: 12px; margin-top: 10px; }
   #messages { flex: 1; overflow-y: auto; padding: 24px; display: flex; flex-direction: column; gap: 14px; }
   .msg { position: relative; max-width: 80%; padding: 12px 16px; border-radius: 18px; line-height: 1.7; font-size: 15px; }
   .msg.user { align-self: flex-end; background: var(--accent); color: #fff; border-bottom-right-radius: 6px; white-space: pre-wrap; box-shadow: 0 1px 2px var(--shadow); }
@@ -700,7 +714,14 @@
       <div id="settings-key-status">读取中…</div>
       <input type="password" id="settings-key" placeholder="粘贴你的 DeepSeek API Key（覆盖 .env）" autocomplete="off">
       <div class="settings-actions"><button id="settings-key-save">保存 Key</button></div>
-      <div class="settings-hint">Key 只存在本机 data/config.json，不会上传。多人使用请各自填自己的 Key。</div>
+      <div class="settings-hint">这是书主（你）的服务器 Key。访客不用填这里，解锁时填他们自己的 Key 即可。</div>
+    </div>
+    <div class="settings-sec">
+      <div class="settings-label">邀请码（让别人用你的 API）</div>
+      <div id="settings-invite-status">读取中…</div>
+      <input type="password" id="settings-invite" placeholder="设置一个邀请码；留空保存 = 关闭门禁" autocomplete="off">
+      <div class="settings-actions"><button id="settings-invite-save">保存邀请码</button></div>
+      <div class="settings-hint">设了邀请码后，别人打开网页要先输邀请码（用你的 API）或填自己的 Key。就你俩时把邀请码发给你女朋友即可。</div>
     </div>
     <div class="settings-sec">
       <div class="settings-label">人设</div>
@@ -722,6 +743,27 @@
         <option value="zh-CN-XiaoxiaoNeural">女声 · 晓晓（同小晓）</option>
       </select>
     </div>
+  </div>
+</div>
+<div id="auth-overlay" style="display:none">
+  <div id="auth-panel">
+    <div id="auth-head">
+      <div id="auth-title">需要解锁才能使用</div>
+      <div id="auth-sub">有邀请码就用书主的 API；没有就填你自己的 Key。</div>
+    </div>
+    <div class="settings-sec">
+      <div class="settings-label">方式一 · 邀请码（用书主的 API）</div>
+      <input type="password" id="auth-invite" placeholder="输入邀请码" autocomplete="off">
+      <div class="settings-actions"><button id="auth-invite-btn">用邀请码进入</button></div>
+    </div>
+    <div class="auth-divider">或</div>
+    <div class="settings-sec">
+      <div class="settings-label">方式二 · 用自己的 API Key（自己出钱）</div>
+      <input type="password" id="auth-key" placeholder="粘贴你的 DeepSeek API Key" autocomplete="off">
+      <div class="settings-actions"><button id="auth-key-btn">用我的 Key 进入</button></div>
+    </div>
+    <div class="settings-hint">邀请码由书主提供。没有邀请码就填自己的 Key，费用由你自己承担；Key 只存在你本机浏览器，不会上传给书主。</div>
+    <div id="auth-err" style="display:none"></div>
   </div>
 </div>
 <script src="https://unpkg.com/vditor@4.0.1/dist/index.min.js"></script>
@@ -1796,10 +1838,11 @@
     let msgEl = null, sources = [], answerText = '', thinkingDone = false;
     try {
       const res = await fetch('/api/ask/stream', {
-        method: 'POST', headers: {'Content-Type': 'application/json'},
+        method: 'POST', headers: {'Content-Type': 'application/json', ...authHeaders()},
         body: JSON.stringify({ question: q, persona, depth, history, book, context: anchorCtx ? anchorCtx.text : '', heading: anchorCtx ? anchorCtx.heading : '' }),
         signal: ac.signal
       });
+      if (authFail(res)) throw new Error('需要解锁');
       if (!res.ok || !res.body) throw new Error('HTTP ' + res.status);
       const reader = res.body.getReader();
       const dec = new TextDecoder();
@@ -1924,9 +1967,10 @@
     try {
       const persona = $('persona-select').value || 'default';
       const res = await fetch('/api/suggest', {
-        method: 'POST', headers: {'Content-Type': 'application/json'},
+        method: 'POST', headers: {'Content-Type': 'application/json', ...authHeaders()},
         body: JSON.stringify({ seed, question: question || '', answer: answer || '', persona, book: currentBook })
       });
+      if (authFail(res)) return [];
       const data = await res.json();
       return data.questions || [];
     } catch (e) { return []; }
@@ -2328,9 +2372,10 @@
     try {
       setPodcastStatus('① 写脚本…');
       const res = await fetch('/api/podcast?book=' + encodeURIComponent(currentBook), {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        method: 'POST', headers: { 'Content-Type': 'application/json', ...authHeaders() },
         body: JSON.stringify({ length: len, format: fmt, chapters, instructions })
       });
+      if (authFail(res)) throw new Error('需要解锁');
       const data = await res.json();
       if (!data.ok) throw new Error(data.error || '生成失败');
       podcastScript = data.script || '';
@@ -2461,9 +2506,10 @@
     const context = podcastContextAt(main);
     try {
       const r = await fetch('/api/podcast/answer/stream?book=' + encodeURIComponent(currentBook), {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        method: 'POST', headers: { 'Content-Type': 'application/json', ...authHeaders() },
         body: JSON.stringify({ question: q, context })
       });
+      if (authFail(r)) throw new Error('需要解锁');
       if (!r.ok || !r.body) throw new Error('接口失败 ' + r.status);
       const reader = r.body.getReader();
       const decoder = new TextDecoder();
@@ -2899,9 +2945,10 @@
     const progress = '已读 ' + s.m + ' / 共 ' + s.total + ' 章 · 讨论 ' + s.d + ' · 深读 ' + s.c;
     try {
       const res = await fetch('/api/notes/organize?book=' + encodeURIComponent(currentBook), {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        method: 'POST', headers: { 'Content-Type': 'application/json', ...authHeaders() },
         body: JSON.stringify({ content: noteContent, progress })
       });
+      if (authFail(res)) throw new Error('需要解锁');
       const data = await res.json();
       if (!data.ok) throw new Error(data.error || '整理失败');
       preOrganize = noteContent;
@@ -3058,9 +3105,10 @@
 
   async function guideStream(body, targetEl) {
     const res = await fetch('/api/guide', {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      method: 'POST', headers: { 'Content-Type': 'application/json', ...authHeaders() },
       body: JSON.stringify(body)
     });
+    if (authFail(res)) throw new Error('需要解锁');
     if (!res.ok || !res.body) throw new Error('HTTP ' + res.status);
     const reader = res.body.getReader();
     const dec = new TextDecoder();
@@ -3199,6 +3247,9 @@
       el.textContent = s.has_key ? ('已配置 · 模型 ' + s.model) : '尚未配置，请粘贴你的 API Key';
       el.className = s.has_key ? 'ok' : 'warn';
       if (!s.has_key) $('settings-key').value = '';
+      const inv = $('settings-invite-status');
+      inv.textContent = s.has_invite_code ? '门禁已开启（别人需邀请码或自带 Key）' : '门禁未开启（拿到网址就能用）';
+      inv.className = s.has_invite_code ? 'ok' : 'warn';
     } catch (e) {
       el.textContent = '读取设置失败';
       el.className = 'warn';
@@ -3207,16 +3258,83 @@
   async function saveSettingsKey() {
     const key = $('settings-key').value.trim();
     if (!key) { toast('请先粘贴 API Key'); return; }
-    const res = await fetch('/api/settings', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ api_key: key }) });
+    const res = await fetch('/api/settings', { method: 'POST', headers: { 'Content-Type': 'application/json', ...authHeaders() }, body: JSON.stringify({ api_key: key }) });
     const r = await res.json();
     if (r.ok) { toast('已保存，下次问答即用新 Key'); $('settings-key').value = ''; refreshSettingsStatus(); }
     else { toast(r.error || '保存失败'); }
   }
+  async function saveSettingsInvite() {
+    const code = $('settings-invite').value.trim();
+    const res = await fetch('/api/settings', { method: 'POST', headers: { 'Content-Type': 'application/json', ...authHeaders() }, body: JSON.stringify({ invite_code: code }) });
+    const r = await res.json();
+    if (r.ok) {
+      toast(code ? '邀请码已保存，门禁已开启' : '已清除邀请码，门禁已关闭');
+      $('settings-invite').value = '';
+      // 门禁刚开启：把本机直接记为「书主已解锁」，免去自己再输一遍
+      if (code) { try { localStorage.setItem('bt-auth', JSON.stringify({ mode: 'invite', code })); } catch (e) {} }
+      else { try { localStorage.removeItem('bt-auth'); } catch (e) {} }
+      refreshSettingsStatus();
+    } else { toast(r.error || '保存失败'); }
+  }
   $('settings-btn').addEventListener('click', openSettings);
   $('settings-close').addEventListener('click', closeSettings);
   $('settings-key-save').addEventListener('click', saveSettingsKey);
+  $('settings-invite-save').addEventListener('click', saveSettingsInvite);
   $('settings-overlay').addEventListener('mousedown', (e) => { if (e.target === $('settings-overlay')) closeSettings(); });
   document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeSettings(); });
+
+  // ---------- 访问门禁（邀请码 / 自带 Key）----------
+  function authHeaders() {
+    try {
+      const a = JSON.parse(localStorage.getItem('bt-auth'));
+      if (a && a.mode === 'invite' && a.code) return { 'X-BookTalk-Invite': a.code };
+      if (a && a.mode === 'byok' && a.key) return { 'X-BookTalk-Key': a.key };
+    } catch (e) {}
+    return {};
+  }
+  function showAuthGate(msg) {
+    const err = $('auth-err');
+    err.style.display = msg ? '' : 'none';
+    if (msg) err.textContent = msg;
+    $('auth-overlay').style.display = 'flex';
+  }
+  function authFail(res) {
+    if (res.status === 401) { try { localStorage.removeItem('bt-auth'); } catch (e) {} showAuthGate('解锁失效，请重新输入'); return true; }
+    return false;
+  }
+  async function unlockWith(mode, value) {
+    const body = mode === 'invite' ? { invite_code: value } : { api_key: value };
+    const res = await fetch('/api/auth', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+    const r = await res.json();
+    if (!r.ok) { showAuthGate(r.error || '解锁失败'); return false; }
+    try { localStorage.setItem('bt-auth', JSON.stringify(mode === 'invite' ? { mode, code: value } : { mode, key: value })); } catch (e) {}
+    return true;
+  }
+  $('auth-invite-btn').addEventListener('click', async () => {
+    const v = $('auth-invite').value.trim();
+    if (!v) { showAuthGate('请输入邀请码'); return; }
+    if (await unlockWith('invite', v)) location.reload();
+  });
+  $('auth-key-btn').addEventListener('click', async () => {
+    const v = $('auth-key').value.trim();
+    if (!v) { showAuthGate('请粘贴你的 API Key'); return; }
+    if (await unlockWith('byok', v)) location.reload();
+  });
+  $('auth-invite').addEventListener('keydown', (e) => { if (e.key === 'Enter') $('auth-invite-btn').click(); });
+  $('auth-key').addEventListener('keydown', (e) => { if (e.key === 'Enter') $('auth-key-btn').click(); });
+  async function initAuth() {
+    try {
+      const res = await fetch('/api/settings');
+      const s = await res.json();
+      let stored = null;
+      try { stored = JSON.parse(localStorage.getItem('bt-auth')); } catch (e) {}
+      if (s.has_invite_code) {
+        if (!stored) showAuthGate();
+      } else if (stored) {
+        try { localStorage.removeItem('bt-auth'); } catch (e) {}
+      }
+    } catch (e) {}
+  }
 
   // ---------- 启动 ----------
   decorateIcons();
@@ -3226,6 +3344,7 @@
   attachDockMagnify($('progress-ticks'), '.bm-tick');
   attachDockMagnify($('rail-overview'), '.rl-ch, .rail-card', { axis: 'y', maxScale: 1.18, radius: 150 });
   setRailCollapsed(false);
+  initAuth();
   loadPersonas();
   loadBook();
   loadSession();
