@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import os
 import re
 import shutil
 import tempfile
@@ -22,6 +23,12 @@ from .brain import answer, guide_stream, list_personas, load_persona, organize_n
 from .store import BookStore
 
 app = FastAPI(title="booktalk")
+
+
+@app.get("/api/health")
+def health() -> dict:
+    """供反向代理 / 部署脚本探活。"""
+    return {"ok": True}
 
 _store: BookStore | None = None
 
@@ -946,7 +953,10 @@ def main() -> int:
     import uvicorn
 
     get_store()  # 预热模型，避免第一次提问卡十几秒
-    uvicorn.run(app, host="127.0.0.1", port=8000)
+    # 本地开发默认只绑 127.0.0.1；Docker 里设 BOOKTALK_HOST=0.0.0.0 让反向代理能进来
+    host = os.getenv("BOOKTALK_HOST", "127.0.0.1")
+    port = int(os.getenv("PORT", "8000"))
+    uvicorn.run(app, host=host, port=port)
     return 0
 
 
