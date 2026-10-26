@@ -14,6 +14,9 @@ load_dotenv(REPO_ROOT / ".env")
 
 # 部分地区连不上 huggingface.co，默认走镜像（可用 .env 里的 HF_ENDPOINT 覆盖）
 os.environ.setdefault("HF_ENDPOINT", "https://hf-mirror.com")
+# faster-whisper 模型在 HF 上用 xet/CAS 分片存储，hf-mirror 不支持 CAS 重建（会 401）。
+# 关掉 xet 强制走经典 HTTP 直链下载，镜像才能正常拉取 model.bin。
+os.environ.setdefault("HF_HUB_DISABLE_XET", "1")
 
 DEEPSEEK_API_KEY = os.getenv("DEEPSEEK_API_KEY", "")
 DEEPSEEK_BASE_URL = os.getenv("DEEPSEEK_BASE_URL", "https://api.deepseek.com")
@@ -43,6 +46,10 @@ TOP_K_FINAL = int(os.getenv("TOP_K_FINAL", "6"))
 # 又能把「插嘴」首响从 20+ 秒压到几秒。追求更准可调大，追求更快可调小。
 RERANK_CANDIDATES = int(os.getenv("RERANK_CANDIDATES", "12"))
 RERANK_MAX_CHARS = int(os.getenv("RERANK_MAX_CHARS", "400"))
+
+# 语音转文字（插嘴/录音）用的本地 Whisper 模型。small 中文更准（首次下载 ~460MB）、
+# base 更快但中文弱（~145MB）。用 faster-whisper 在 CPU 上跑，离线可用、不依赖 Google。
+WHISPER_MODEL = os.getenv("WHISPER_MODEL", "small")
 
 # 人设：默认「读书搭子」，可用 --persona 或 /persona 切换
 PERSONA = os.getenv("PERSONA", "default")

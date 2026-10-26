@@ -8,3 +8,4 @@ uvicorn>=0.29
 python-multipart>=0.0.9
 edge-tts>=6.1
 jieba>=0.42
+faster-whisper>=1.0

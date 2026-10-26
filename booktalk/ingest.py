@@ -15,11 +15,13 @@ import sys
 from pathlib import Path
 
 from docling.document_converter import DocumentConverter
+from docling_core.types.doc import ImageRefMode
 
 from . import config
 from .store import BookStore, Chunk
 
 _HEADING_RE = re.compile(r"^(#{1,6})\s+(.+?)\s*$")
+_IMAGE_RE = re.compile(r"^!\[[^\]]*\]\([^)]*\)\s*$")
 
 
 def _split_by_headings(markdown: str, source: str) -> list[Chunk]:
@@ -47,6 +49,9 @@ def _split_by_headings(markdown: str, source: str) -> list[Chunk]:
             flush()
             current_heading = m.group(2).strip()
             buffer = []
+        elif _IMAGE_RE.match(line.strip()):
+            # 图片行不进向量（正文里单独渲染），避免把图片 URI 当成正文检索
+            continue
         else:
             buffer.append(line)
     flush()
@@ -56,13 +61,20 @@ def _split_by_headings(markdown: str, source: str) -> list[Chunk]:
 _TEXT_EXTS = {".md", ".markdown", ".txt", ".text"}
 
 
-def _convert_to_markdown(path: Path) -> str:
+def _convert_to_markdown(path: Path, book: str) -> str:
     # 纯文本/标记文件直接读，不必走 Docling（省得下载解析模型）
     if path.suffix.lower() in _TEXT_EXTS:
         return path.read_text(encoding="utf-8")
     converter = DocumentConverter()
     result = converter.convert(str(path))
-    return result.document.export_to_markdown()
+    # PDF/EPUB 里的图片用 REFERENCED 模式落盘到 data/books/assets/{book}/，
+    # markdown 引用 /api/book/{book}/assets/…，正文能直接看图（不内嵌 base64 撑大 md）。
+    asset_dir = config.BOOKS_DIR / "assets" / book
+    return result.document.export_to_markdown(
+        image_mode=ImageRefMode.REFERENCED,
+        image_dir=asset_dir,
+        image_uri_prefix=f"/api/book/{book}/assets/",
+    )
 
 
 def import_book(
@@ -85,7 +97,7 @@ def import_book(
     config.BOOKS_DIR.mkdir(parents=True, exist_ok=True)
     config.INDEX_DIR.mkdir(parents=True, exist_ok=True)
 
-    markdown = _convert_to_markdown(path)
+    markdown = _convert_to_markdown(path, book)
     config.MARKDOWN_DIR.mkdir(parents=True, exist_ok=True)
     (config.MARKDOWN_DIR / f"{book}.md").write_text(markdown, encoding="utf-8")
 

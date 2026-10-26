@@ -10,9 +10,10 @@ import asyncio
 import json
 import re
 import shutil
+import tempfile
 from pathlib import Path
 
-from fastapi import FastAPI, HTTPException, UploadFile, File
+from fastapi import FastAPI, HTTPException, UploadFile, File, Request
 from fastapi.responses import FileResponse, HTMLResponse, Response, StreamingResponse
 from pydantic import BaseModel
 
@@ -25,6 +26,9 @@ app = FastAPI(title="booktalk")
 _store: BookStore | None = None
 
 _OLD_SESSION_PATH = config.NOTES_DIR.parent / "session.json"
+
+# markdown 里的图片行（PDF/EPUB 的 REFERENCED 图片），正文单独渲染、不进向量/中心句
+_IMAGE_LINE_RE = re.compile(r"^!\[[^\]]*\]\([^)]*\)\s*$")
 
 
 def get_store() -> BookStore:
@@ -217,10 +221,72 @@ def book(name: str) -> dict:
     return {"name": name, "markdown": _book_markdown(name)}
 
 
+@app.get("/api/book/{name}/assets/{fname}")
+def book_asset(name: str, fname: str) -> FileResponse:
+    """PDF/EPUB 里的图片（REFERENCED 落盘在 data/books/assets/{book}/）。"""
+    if name not in _books():
+        raise HTTPException(status_code=404, detail="没有这本书")
+    asset_dir = (config.BOOKS_DIR / "assets" / name).resolve()
+    path = (asset_dir / fname).resolve()
+    # 防目录穿越：fname 必须是单个纯文件名，且解析后仍落在该书 assets 目录内
+    if path.parent != asset_dir or not path.is_file():
+        raise HTTPException(status_code=404, detail="图片不存在")
+    return FileResponse(path)
+
+
 @app.get("/api/book/{name}/headings")
 def book_headings(name: str) -> dict:
     """某本书的章节标题（轻量，供播客「选篇章」等下拉用）。"""
     return {"headings": _headings(name)}
+
+
+@app.delete("/api/book/{name}")
+def delete_book(name: str) -> dict:
+    """删除一本书：清索引 + 删 markdown/笔记/会话/中心句/播客缓存/图片，不可恢复。"""
+    if name not in _books():
+        raise HTTPException(status_code=404, detail="没有这本书")
+
+    # 1) 向量索引（只删这本书的点）
+    try:
+        get_store().clear(name)
+    except Exception as e:  # noqa: BLE001
+        print(f"[booktalk] 清索引失败（忽略）: {e}")
+
+    # 2) 本地衍生文件
+    targets = [
+        config.MARKDOWN_DIR / f"{name}.md",
+        config.NOTES_DIR / f"{name}.md",
+        config.SESSION_DIR / f"{name}.json",
+        config.KEYPOINTS_DIR / f"{name}.json",
+        config.PODCAST_DIR / f"{name}.json",
+    ]
+    for p in targets:
+        try:
+            if p.exists():
+                p.unlink()
+        except Exception:  # noqa: BLE001
+            pass
+
+    # 3) PDF/EPUB 图片 assets 目录
+    asset_dir = config.BOOKS_DIR / "assets" / name
+    if asset_dir.exists():
+        shutil.rmtree(asset_dir, ignore_errors=True)
+
+    # 4) 这本书保存过的播客（saved/*.json 里 book 字段匹配）
+    saved = config.PODCAST_DIR / "saved"
+    if saved.exists():
+        for mj in saved.glob("*.json"):
+            try:
+                m = json.loads(mj.read_text(encoding="utf-8"))
+                if m.get("book") == name:
+                    mj.unlink()
+                    mp3 = mj.with_suffix(".mp3")
+                    if mp3.exists():
+                        mp3.unlink()
+            except Exception:  # noqa: BLE001
+                pass
+
+    return {"ok": True}
 
 
 @app.post("/api/import")
@@ -373,6 +439,51 @@ async def tts(req: TTSRequest) -> Response:
         raise HTTPException(status_code=502, detail=f"TTS 失败：{e}")
 
 
+# ---------- 语音转文字（本地 Whisper，供插嘴/录音用；离线、不依赖 Google） ----------
+_stt_model = None
+_stt_model_name: str | None = None
+
+
+def _get_stt_model():
+    """懒加载 faster-whisper 模型，按模型名缓存（首次会下载模型，较慢）。"""
+    global _stt_model, _stt_model_name
+    name = config.WHISPER_MODEL
+    if _stt_model is None or _stt_model_name != name:
+        from faster_whisper import WhisperModel  # 延迟导入，省启动时间
+
+        _stt_model = WhisperModel(name, device="cpu", compute_type="int8")
+        _stt_model_name = name
+    return _stt_model
+
+
+@app.post("/api/stt")
+async def stt(request: Request) -> dict:
+    """接收浏览器录音的音频字节（webm/opus），转成文字。"""
+    data = await request.body()
+    if not data:
+        raise HTTPException(status_code=400, detail="空音频")
+    tmp = None
+    try:
+        with tempfile.NamedTemporaryFile(suffix=".webm", delete=False) as f:
+            f.write(data)
+            tmp = f.name
+        model = _get_stt_model()
+        segments, info = model.transcribe(
+            tmp,
+            language=None,               # 中英自动检测
+            beam_size=5,
+            vad_filter=True,             # 静音过滤，减少空白段
+            condition_on_previous_text=False,
+        )
+        text = "".join(s.text for s in segments).strip()
+        return {"ok": True, "text": text, "lang": info.language}
+    except Exception as e:  # noqa: BLE001
+        return {"ok": False, "error": f"语音识别失败：{e}"}
+    finally:
+        if tmp:
+            Path(tmp).unlink(missing_ok=True)
+
+
 # ---------- 跟着读（主动阅读循环：节奏 / 主动回忆 / 复盘） ----------
 @app.post("/api/guide")
 def guide_route(req: GuideRequest) -> StreamingResponse:
@@ -469,8 +580,8 @@ def keypoints(book: str = "") -> dict:
     markdown = _book_markdown(book)
     paragraphs = []
     for line in markdown.split("\n"):
-        # 与前端 renderBook 完全一致：标题行/空行不算段落
-        if re.match(r"^(#{1,6})\s+(.*)$", line) or not line.strip():
+        # 与前端 renderBook 完全一致：标题行/空行/图片行不算段落
+        if re.match(r"^(#{1,6})\s+(.*)$", line) or not line.strip() or _IMAGE_LINE_RE.match(line.strip()):
             continue
         paragraphs.append({"key": _key_indices(line.strip())})
 

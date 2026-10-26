@@ -10,6 +10,7 @@
     --bg: #f5f5f7;
     --panel: #ffffff;
     --border: #e8e8ed;
+    --divider: rgba(0,0,0,.06);
     --text: #1d1d1f;
     --muted: #86868b;
     --accent: #0071e3;
@@ -22,12 +23,16 @@
     --selbar-hover: #3a3a3c;
     --shadow: rgba(0,0,0,.06);
     --serif: Georgia, "Songti SC", "STSong", "Noto Serif SC", "Times New Roman", serif;
+    /* 苹果式缓动：交互用平滑 ease-out，弹层/按压用带轻微回弹的 spring */
+    --ease-out: cubic-bezier(.33, 1, .68, 1);
+    --ease-spring: cubic-bezier(.34, 1.56, .64, 1);
   }
   @media (prefers-color-scheme: dark) {
     :root:not([data-theme="light"]):not([data-theme="flash"]) {
       --bg: #1c1c1e;
       --panel: #2c2c2e;
       --border: #3a3a3c;
+      --divider: #3a3a3c;
       --text: #f2f2f7;
       --muted: #98989d;
       --accent: #0a84ff;
@@ -45,6 +50,7 @@
     --bg: #1c1c1e;
     --panel: #2c2c2e;
     --border: #3a3a3c;
+    --divider: #3a3a3c;
     --text: #f2f2f7;
     --muted: #98989d;
     --accent: #0a84ff;
@@ -72,6 +78,19 @@
     color: var(--text);
   }
   * { box-sizing: border-box; }
+  /* 苹果式过渡：交互统一平滑缓动 + 轻微按压回弹，弹层淡入/缩放出现 */
+  @keyframes fade-in { from { opacity: 0; } to { opacity: 1; } }
+  @keyframes pop-in { from { opacity: 0; transform: scale(.96) translateY(6px); } to { opacity: 1; transform: none; } }
+  @keyframes rise-in { from { opacity: 0; transform: translateY(-6px); } to { opacity: 1; transform: none; } }
+  button { -webkit-tap-highlight-color: transparent; transition: transform .15s var(--ease-out), opacity .2s var(--ease-out), background-color .2s var(--ease-out), border-color .2s var(--ease-out), color .2s var(--ease-out), box-shadow .25s var(--ease-out); }
+  button:active { transform: scale(.97); }
+  @media (prefers-reduced-motion: reduce) {
+    * { animation-duration: .001s !important; animation-iteration-count: 1 !important; transition-duration: .001s !important; }
+  }
+  /* 统一图标：Lucide 风格内联 SVG，currentColor 随主题变色 */
+  .ic { width: 16px; height: 16px; stroke: currentColor; stroke-width: 1.6; fill: none; stroke-linecap: round; stroke-linejoin: round; vertical-align: -3px; flex: none; }
+  .ic-sm { width: 14px; height: 14px; vertical-align: -2px; }
+  .ic-only { display: inline-flex; align-items: center; justify-content: center; }
   html, body { height: 100%; margin: 0; }
   body {
     font-family: -apple-system, "SF Pro Text", "PingFang SC", "Microsoft YaHei", system-ui, sans-serif;
@@ -81,26 +100,70 @@
   }
   #app { display: flex; width: 100%; height: 100vh; }
 
+  /* 左侧折叠菜单：书籍 + 批注/书签便签概览（像从本子边缘漏出来的便签纸） */
+  #rail { position: relative; z-index: 5; width: 264px; flex: none; background: var(--panel); border-right: 1px solid var(--divider); display: flex; flex-direction: column; overflow: hidden; }
+  #rail.collapsed { width: 48px; }
+  #rail-toggle { height: 40px; display: flex; align-items: center; justify-content: flex-end; padding-right: 14px; font-size: 17px; color: var(--muted); cursor: pointer; user-select: none; flex: none; }
+  #rail-toggle:hover { color: var(--accent); }
+  #rail.collapsed #rail-toggle { justify-content: center; padding-right: 0; }
+  #rail-body { flex: 1; overflow-y: auto; padding: 0 12px 12px; display: flex; flex-direction: column; gap: 16px; min-width: 264px; box-sizing: border-box; }
+  #rail.collapsed #rail-body { display: none; }
+  .rail-sec { display: flex; flex-direction: column; gap: 6px; }
+  .rail-sec:last-child { flex: 1; min-height: 0; }
+  .rail-sec-title { font-size: 11px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: .4px; }
+  #rail-import { border: 1px solid var(--border); background: var(--accent); color: #fff; font-size: 13px; padding: 7px 10px; border-radius: 8px; cursor: pointer; }
+  #rail-import:hover { opacity: .9; }
+  #rail-import.importing { opacity: .6; cursor: default; }
+  #rail-books { display: flex; flex-direction: column; gap: 2px; }
+  #rail-books .rail-book { display: flex; align-items: center; gap: 4px; font-size: 13px; padding: 6px 8px; border-radius: 6px; cursor: pointer; color: var(--text); transition: background-color .15s var(--ease-out), color .15s var(--ease-out); }
+  #rail-books .rail-book:hover { background: var(--seg-bg); }
+  #rail-books .rail-book.active { background: var(--accent-soft); color: var(--accent); }
+  #rail-books .rail-book-name { flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  #rail-books .rail-book-del { display: none; border: none; background: transparent; color: var(--muted); cursor: pointer; padding: 2px; border-radius: 4px; line-height: 0; flex: none; }
+  #rail-books .rail-book:hover .rail-book-del { display: inline-flex; align-items: center; justify-content: center; }
+  #rail-books .rail-book-del:hover { color: #d9433f; background: var(--seg-bg); }
+  #rail-overview { flex: 1; min-height: 0; overflow-y: auto; overflow-x: hidden; }
+  .rl-inner { position: relative; padding: 4px 2px 10px 26px; }
+  .rl-inner::before { content: ''; position: absolute; left: 9px; top: 10px; bottom: 16px; width: 2px; background: var(--border); border-radius: 1px; pointer-events: none; }
+  .rl-ch { display: flex; align-items: center; gap: 6px; font-size: 11px; font-weight: 700; color: var(--muted); padding: 12px 2px 4px 0; cursor: pointer; transform: scale(var(--dock, 1)); transform-origin: left center; transition: transform .15s var(--ease-out), color .15s var(--ease-out); }
+  .rl-ch:hover { color: var(--accent); }
+  .rl-ch-text { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .rl-ch.hd-1 { font-size: 12px; color: var(--text); }
+  .rl-ch.active { color: var(--accent); }
+  .rl-ch.active::after { content: ''; flex: none; width: 0; height: 0; border-top: 5px solid transparent; border-bottom: 5px solid transparent; border-left: 8px solid #eab308; }
+  .rl-row { position: relative; margin: 0 0 8px; cursor: pointer; }
+  .rl-dot { position: absolute; left: 9px; top: 15px; transform: translate(-50%, -50%); width: 10px; height: 10px; border-radius: 50%; background: #4a90d9; z-index: 2; }
+  .rl-dot.bm { border-radius: 2px; background: #e8a33d; }
+  .rl-conn { position: absolute; left: 9px; top: 15px; width: 17px; height: 2px; background: var(--border); }
+  .rail-empty { font-size: 12px; color: var(--muted); padding: 6px 4px 6px 26px; }
+  /* 批注/书签直显卡片 */
+  .rail-card { position: relative; border: 1px solid var(--border); border-radius: 9px; padding: 8px 26px 8px 12px; cursor: pointer; background: var(--bg); text-align: left; transform: scale(var(--dock, 1)); transform-origin: left center; transition: transform .15s var(--ease-out), border-color .2s var(--ease-out); }
+  .rail-card:hover { border-color: var(--accent); }
+  .rail-card .rc-head { display: flex; align-items: center; gap: 6px; font-size: 11px; color: var(--muted); flex-wrap: wrap; }
+  .rail-card .rc-kind { font-weight: 700; }
+  .rail-card.annot .rc-kind { color: #4a90d9; }
+  .rail-card.bm .rc-kind { color: #e8a33d; }
+  .rail-card .rc-text { font-size: 12.5px; color: var(--text); margin-top: 4px; line-height: 1.45; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+  .rail-card .rc-del { position: absolute; top: 6px; right: 6px; border: none; background: transparent; color: var(--muted); cursor: pointer; padding: 3px; border-radius: 5px; display: none; line-height: 0; }
+  .rail-card:hover .rc-del { display: block; }
+  .rail-card .rc-del:hover { color: #d9433f; background: var(--seg-bg); }
+  /* 折叠态：一列快捷小图标（导入 / 时间轴 / 播客库 / 设置） */
+  #rail-mini { display: none; flex: 1; flex-direction: column; align-items: center; gap: 6px; padding: 8px 0; overflow-y: auto; }
+  #rail.collapsed #rail-mini { display: flex; }
+  .rail-mini-btn { width: 34px; height: 34px; border: none; background: transparent; color: var(--muted); border-radius: 8px; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; }
+  .rail-mini-btn:hover { background: var(--seg-bg); color: var(--accent); }
+  .rail-mini-btn .ic { width: 18px; height: 18px; }
+
   /* 左：书（Kindle 阅读体验） */
-  #sidebar { position: relative; width: 46%; min-width: 360px; border-right: 1px solid var(--border); display: flex; flex-direction: column; background: var(--paper); transition: background .25s; }
+  #sidebar { position: relative; width: 46%; min-width: 360px; border-right: 1px solid var(--divider); display: flex; flex-direction: column; background: var(--paper); transition: background .25s; }
   #book-header { position: relative; z-index: 3; min-height: 52px; padding: 8px 22px; border-bottom: 1px solid var(--border); background: var(--panel); display: flex; align-items: center; gap: 12px; }
   #book-title { font-size: 15px; font-weight: 600; white-space: nowrap; }
-  #book-hint { flex: 1; min-width: 0; font-size: 12px; color: var(--muted); line-height: 1.4; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  #book-select { border: 1px solid var(--border); border-radius: 8px; background: var(--panel); color: var(--text); font-size: 13px; padding: 4px 6px; max-width: 150px; }
-  #import-btn { border: 1px solid var(--border); background: var(--panel); color: var(--accent); font-size: 13px; padding: 4px 10px; border-radius: 8px; cursor: pointer; white-space: nowrap; flex: none; }
-  #import-btn:hover { border-color: var(--accent); }
-  #import-btn.importing { color: var(--muted); cursor: default; }
-  #book-footer { position: relative; z-index: 3; padding: 8px 22px 10px; border-top: 1px solid var(--border); background: var(--panel); }
+  #book-footer { position: relative; z-index: 3; padding: 12px 22px 12px; border-top: 1px solid var(--border); background: var(--panel); }
   #progress-bar { position: relative; height: 3px; background: var(--border); border-radius: 2px; overflow: visible; cursor: pointer; }
   #progress-fill { height: 100%; width: 0; background: var(--accent); border-radius: 2px; transition: width .3s; }
   #progress-ticks { position: absolute; inset: 0; pointer-events: none; }
-  #progress-ticks .bm-tick { position: absolute; top: 50%; width: 3px; height: 9px; transform: translate(-50%, -50%); background: #e8a33d; border-radius: 1px; pointer-events: auto; cursor: pointer; }
+  #progress-ticks .bm-tick { position: absolute; top: 50%; width: 3px; height: 9px; transform: translate(-50%, -50%) scale(var(--dock, 1)); transform-origin: center bottom; background: #e8a33d; border-radius: 1px; pointer-events: auto; cursor: pointer; transition: transform .15s; }
   #book-content .seg.bm { box-shadow: inset 3px 0 0 #e8a33d; }
-  #toc-bm { margin-top: 10px; border-top: 1px solid var(--border); padding-top: 8px; }
-  #toc-bm .toc-bm-title { font-size: 11px; color: var(--muted); margin-bottom: 4px; }
-  #toc-bm .toc-bm-item { display: flex; align-items: center; gap: 6px; font-size: 12px; padding: 3px 0; }
-  #toc-bm .toc-bm-item span { flex: 1; cursor: pointer; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  #toc-bm .toc-bm-item button { border: none; background: transparent; color: var(--muted); cursor: pointer; }
   #progress-label { font-size: 11px; color: var(--muted); margin-top: 4px; }
   #book-content .seg.annot { border-left: 3px solid #4a90d9; padding-left: 8px; }
   #book-content .seg.annot .annot-tag { font-size: 12px; margin-right: 6px; cursor: pointer; opacity: .85; }
@@ -115,13 +178,13 @@
   #annot-pop .annot-item .a-del { float: right; border: none; background: transparent; color: var(--muted); cursor: pointer; }
   #flash-controls { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-top: 8px; padding-top: 8px; border-top: 1px dashed var(--border); }
   #flash-controls .fc-label { font-size: 11px; color: var(--muted); }
-  #flash-controls input[type=range] { width: 84px; accent-color: var(--accent); }
+  #flash-controls .fc-hint { font-size: 11px; color: var(--muted); margin-right: auto; }
   #flash-shape { display: flex; gap: 2px; background: var(--seg-bg); border-radius: 7px; padding: 2px; }
   #flash-shape button { border: none; background: transparent; color: var(--text); font-size: 11px; padding: 3px 9px; border-radius: 5px; cursor: pointer; }
   #flash-shape button.active { background: var(--panel); box-shadow: 0 1px 2px var(--shadow); }
   /* 跟着读：主动阅读循环 */
-  #guide-row { display: flex; gap: 8px; margin-top: 6px; }
-  #guide-row button { flex: 1; border: 1px solid var(--border); background: var(--panel); color: var(--text); font-size: 12px; padding: 5px 0; border-radius: 8px; cursor: pointer; }
+  #guide-row { display: flex; gap: 8px; margin-top: 8px; }
+  #guide-row button { flex: 1; border: 1px solid var(--border); background: var(--panel); color: var(--text); font-size: 13px; padding: 0 14px; min-height: 40px; border-radius: 20px; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; gap: 6px; }
   #guide-row button:hover { border-color: var(--accent); color: var(--accent); }
   #guide-panel {
     position: absolute; left: 14px; right: 14px; bottom: 66px; z-index: 5;
@@ -129,6 +192,7 @@
     box-shadow: 0 10px 34px var(--shadow);
     padding: 12px 14px; max-height: 62%; overflow-y: auto;
     display: flex; flex-direction: column; gap: 10px;
+    animation: rise-in .22s var(--ease-out);
   }
   #guide-head { display: flex; align-items: center; gap: 8px; }
   #guide-title { font-size: 13px; font-weight: 700; color: var(--accent); flex: 1; }
@@ -136,7 +200,11 @@
   #guide-close:hover { color: var(--text); }
   #guide-chunk { border-left: 3px solid var(--accent); padding-left: 10px; }
   #guide-chunk-heading { font-size: 13px; font-weight: 600; color: var(--text); }
-  #guide-chunk-preview { font-size: 12px; color: var(--muted); line-height: 1.6; margin-top: 3px; }
+  #guide-chunk-preview { font-size: 14px; color: var(--text); line-height: 1.7; margin-top: 4px; }
+  #guide-chunk-preview .guide-thinking { color: var(--muted); font-size: 13px; }
+  #guide-src-toggle { margin-top: 6px; border: 1px solid var(--border); background: var(--seg-bg); color: var(--muted); font-size: 12px; padding: 2px 10px; border-radius: 20px; cursor: pointer; }
+  #guide-src-toggle:hover { color: var(--accent); border-color: var(--accent); }
+  #guide-chunk-src { margin-top: 6px; font-size: 12.5px; color: var(--muted); line-height: 1.6; max-height: 160px; overflow-y: auto; border-top: 1px dashed var(--border); padding-top: 6px; white-space: pre-wrap; }
   #guide-body { font-size: 14px; line-height: 1.7; color: var(--text); }
   #guide-body .guide-thinking { color: var(--muted); font-size: 13px; }
   #guide-answer-wrap { display: flex; gap: 8px; }
@@ -151,24 +219,55 @@
   #book-content .seg.guide-cur { border-radius: 4px; }
   #guide-hl-toggle { border: 1px solid var(--border); background: var(--seg-bg); color: var(--muted); font-size: 12px; padding: 3px 10px; border-radius: 20px; cursor: pointer; }
   #guide-hl-toggle.on { color: var(--accent); border-color: var(--accent); }
-  .confetti { position: absolute; top: -12px; z-index: 30; pointer-events: none; animation: confetti-fall 2.2s ease-in forwards; }
+  .confetti { position: absolute; top: -12px; z-index: 30; pointer-events: none; width: 10px; height: 10px; border-radius: 50%; animation: confetti-fall 2.2s ease-in forwards; }
   @keyframes confetti-fall { 0% { transform: translateY(0) rotate(0deg); opacity: 1; } 100% { transform: translateY(90vh) rotate(340deg); opacity: 0; } }
   #toast { position: absolute; top: 12px; left: 50%; transform: translateX(-50%); z-index: 30; background: var(--panel); color: var(--text); border: 1px solid var(--border); border-radius: 20px; padding: 8px 16px; font-size: 13px; box-shadow: 0 6px 20px var(--shadow); display: none; max-width: 80%; text-align: center; }
   #book-content {
     flex: 1; overflow-y: auto; padding: 30px 44px 64px;
-    font-family: var(--serif); font-size: 17px; line-height: 1.9; color: var(--book-text);
+    font-family: var(--serif); font-size: var(--book-font-size, 17px); line-height: var(--book-line-height, 1.9); color: var(--book-text);
   }
-  #book-content .heading { font-family: var(--serif); font-weight: 700; color: var(--text); }
+  #book-content .heading { font-family: var(--serif); font-weight: 700; color: var(--book-text); }
   #book-content .heading.cov-1::before { content: "●"; color: var(--muted); font-size: 8px; margin-right: 7px; vertical-align: 2px; opacity: .55; }
   #book-content .heading.cov-2::before { content: "●"; color: var(--accent); font-size: 9px; margin-right: 7px; vertical-align: 2px; }
   #book-content .heading.cov-3::before { content: "●"; color: var(--accent); font-size: 11px; margin-right: 6px; vertical-align: 1px; text-shadow: 0 0 6px var(--accent); }
-  #book-content h2 { font-size: 22px; margin: 34px 0 14px; }
-  #book-content h3 { font-size: 19px; margin: 26px 0 10px; }
+  #book-content h2 { font-size: calc(var(--book-font-size, 17px) * 1.32); margin: 34px 0 14px; }
+  #book-content h3 { font-size: calc(var(--book-font-size, 17px) * 1.14); margin: 26px 0 10px; }
   #book-content .seg { margin: 0 0 14px; cursor: text; border-radius: 4px; padding: 2px 4px; margin-left: -4px; transition: background .15s; }
   #book-content .seg.hl { background: var(--hl); }
+  #book-content .book-fig { margin: 18px 0; text-align: center; }
+  #book-content .book-img { max-width: 100%; border-radius: 8px; box-shadow: 0 2px 10px var(--shadow); }
   #book-content .heading.flash { background: var(--accent-soft); border-radius: 4px; }
+  /* 正文阅读设置（Aa）：字号 / 背景 / 行距。背景色与主题模式正交——用户选定后固定，其余 UI 仍随主题 */
+  #reading-btn { flex: none; border: 1px solid var(--border); background: var(--panel); color: var(--muted); font-size: 12px; font-weight: 600; padding: 4px 10px; border-radius: 7px; cursor: pointer; }
+  #reading-btn:hover { border-color: var(--accent); color: var(--accent); }
+  #reading-panel { position: absolute; top: calc(100% + 8px); right: 22px; z-index: 40; display: none; width: 268px; background: var(--panel); border: 1px solid var(--border); border-radius: 12px; box-shadow: 0 10px 32px var(--shadow); padding: 12px 14px; }
+  #reading-panel.show { display: block; animation: pop-in .22s var(--ease-spring); }
+  .rp-row { display: flex; align-items: center; gap: 10px; padding: 7px 0; }
+  .rp-row + .rp-row { border-top: 1px solid var(--border); }
+  .rp-label { font-size: 12px; color: var(--muted); width: 34px; flex: none; }
+  #rp-font-down, #rp-font-up { flex: none; width: 32px; height: 26px; padding: 0; border: 1px solid var(--border); background: var(--panel); color: var(--text); font-size: 13px; border-radius: 7px; cursor: pointer; }
+  #rp-font-down:hover, #rp-font-up:hover { border-color: var(--accent); color: var(--accent); }
+  #rp-font-val { font-size: 13px; color: var(--text); min-width: 24px; text-align: center; font-variant-numeric: tabular-nums; }
+  .rp-swatches { display: flex; gap: 6px; flex-wrap: wrap; flex: 1; align-items: center; }
+  .rp-swatch { width: 26px; height: 26px; border-radius: 50%; border: 1px solid var(--border); cursor: pointer; padding: 0; flex: none; }
+  .rp-swatch.active { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .rp-swatch.auto { background: linear-gradient(135deg, #ffffff 48%, #333333 52%); }
+  .rp-swatch.white { background: #ffffff; }
+  .rp-swatch.cream { background: #f7f1e3; }
+  .rp-swatch.green { background: #cfe8cf; }
+  .rp-swatch.parchment { background: #f2e8d5; }
+  .rp-swatch.dark { background: #171717; }
+  .rp-seg { display: flex; gap: 2px; background: var(--seg-bg); border-radius: 7px; padding: 2px; flex: 1; }
+  .rp-seg button { flex: 1; border: none; background: transparent; color: var(--text); font-size: 12px; padding: 4px 0; border-radius: 5px; cursor: pointer; }
+  .rp-seg button.active { background: var(--panel); box-shadow: 0 1px 2px var(--shadow); }
+  /* 用户选定的正文背景色（覆盖主题，只作用于书区） */
+  #sidebar[data-paper="white"] { --paper: #ffffff; --book-text: #26241f; }
+  #sidebar[data-paper="cream"] { --paper: #f7f1e3; --book-text: #2a2925; }
+  #sidebar[data-paper="green"] { --paper: #cfe8cf; --book-text: #1f3a1f; }
+  #sidebar[data-paper="parchment"] { --paper: #f2e8d5; --book-text: #3a3226; }
+  #sidebar[data-paper="dark"] { --paper: #171717; --book-text: #d8d3c8; }
   /* 目录侧栏 */
-  #toc { position: relative; z-index: 3; display: none; max-height: 42%; overflow: hidden; border-bottom: 1px solid var(--border); background: var(--panel); padding: 8px 14px; }
+  #toc { position: relative; z-index: 3; display: none; max-height: 42%; overflow: hidden; border-bottom: 1px solid var(--border); background: var(--panel); padding: 8px 14px; animation: rise-in .2s var(--ease-out); }
   #toc-search { width: 100%; box-sizing: border-box; margin-bottom: 8px; padding: 6px 10px; border: 1px solid var(--border); border-radius: 7px; background: var(--panel); color: var(--text); font-size: 13px; flex: none; }
   #toc-search:focus { outline: none; border-color: var(--accent); }
   #toc-list { max-height: calc(42vh - 66px); overflow-y: auto; }
@@ -205,11 +304,17 @@
   #chat-header select { padding: 6px 8px; border: 1px solid var(--border); border-radius: 8px; font-size: 13px; background: var(--panel); color: var(--text); }
   #podcast, #settings-btn { border: 1px solid var(--border); background: var(--panel); color: var(--muted); font-size: 13px; padding: 5px 10px; border-radius: 8px; cursor: pointer; white-space: nowrap; }
   #podcast.on { color: #d9433f; border-color: #d9433f; }
-  #theme-switch { display: flex; gap: 2px; background: var(--seg-bg); border-radius: 9px; padding: 2px; }
-  #theme-switch button { border: none; background: transparent; color: var(--text); font-size: 14px; cursor: pointer; padding: 5px 8px; border-radius: 7px; line-height: 1; }
-  #theme-switch button.active { background: var(--panel); box-shadow: 0 1px 3px var(--shadow); }
-  #settings-overlay { position: fixed; inset: 0; z-index: 200; display: none; align-items: center; justify-content: center; background: rgba(0,0,0,.45); }
-  #settings-panel { width: min(420px, 92vw); max-height: 86vh; overflow-y: auto; background: var(--panel); border: 1px solid var(--border); border-radius: 14px; box-shadow: 0 12px 40px rgba(0,0,0,.3); padding: 18px; }
+  #mode-wrap { position: relative; flex: none; }
+  #mode-wrap::before { content: ''; position: absolute; top: -4px; bottom: -4px; right: 100%; width: 10px; }
+  #mode-toggle { display: inline-flex; align-items: center; justify-content: center; width: 34px; height: 32px; border: 1px solid var(--border); background: var(--panel); color: var(--muted); border-radius: 8px; cursor: pointer; }
+  #mode-toggle:hover { color: var(--accent); border-color: var(--accent); }
+  #mode-menu { position: absolute; top: 50%; right: 100%; margin-right: 6px; transform: translateY(-50%); z-index: 40; display: none; flex-direction: row; align-items: center; gap: 2px; padding: 5px; background: var(--panel); border: 1px solid var(--border); border-radius: 10px; box-shadow: 0 6px 20px var(--shadow); white-space: nowrap; }
+  #mode-wrap:hover #mode-menu { display: flex; }
+  #mode-menu button { display: inline-flex; align-items: center; gap: 6px; border: none; background: transparent; color: var(--text); font-size: 13px; padding: 6px 9px; border-radius: 7px; cursor: pointer; }
+  #mode-menu button:hover { background: var(--seg-bg); }
+  #mode-menu button.active { background: var(--accent-soft); color: var(--accent); }
+  #settings-overlay { position: fixed; inset: 0; z-index: 200; display: none; align-items: center; justify-content: center; background: rgba(0,0,0,.45); animation: fade-in .2s var(--ease-out); }
+  #settings-panel { width: min(420px, 92vw); max-height: 86vh; overflow-y: auto; background: var(--panel); border: 1px solid var(--border); border-radius: 14px; box-shadow: 0 12px 40px rgba(0,0,0,.3); padding: 18px; animation: pop-in .26s var(--ease-spring); }
   #settings-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px; }
   #settings-title { font-size: 16px; font-weight: 700; color: var(--text); }
   #settings-close { border: none; background: transparent; color: var(--muted); font-size: 16px; cursor: pointer; }
@@ -279,6 +384,19 @@
   .welcome-sub { font-size: 14px; color: var(--muted); margin-bottom: 26px; line-height: 1.6; }
   .welcome .suggest-list { justify-content: center; }
 
+  /* 空态（还没有书）：正文区 hero + 聊天区三步引导 */
+  .empty-state { margin: auto; text-align: center; max-width: 360px; padding: 48px 24px; }
+  .empty-icon { width: 72px; height: 72px; margin: 0 auto 18px; border-radius: 22px; background: var(--accent-soft); color: var(--accent); display: flex; align-items: center; justify-content: center; }
+  .empty-icon .ic { width: 34px; height: 34px; }
+  .empty-title { font-size: 20px; font-weight: 700; color: var(--book-text); margin-bottom: 8px; }
+  .empty-sub { font-size: 14px; color: var(--muted); line-height: 1.6; margin-bottom: 24px; }
+  .empty-cta { border: none; background: var(--accent); color: #fff; font-size: 15px; font-weight: 600; padding: 11px 26px; border-radius: 22px; cursor: pointer; display: inline-flex; align-items: center; gap: 7px; }
+  .empty-cta:hover { opacity: .92; }
+  .empty-formats { font-size: 12px; color: var(--muted); margin-top: 16px; }
+  .empty-steps { text-align: left; display: flex; flex-direction: column; gap: 12px; }
+  .empty-step { display: flex; align-items: flex-start; gap: 10px; font-size: 14px; color: var(--text); line-height: 1.5; }
+  .es-n { flex: none; width: 22px; height: 22px; border-radius: 50%; background: var(--accent-soft); color: var(--accent); font-size: 12px; font-weight: 700; display: inline-flex; align-items: center; justify-content: center; margin-top: 1px; }
+
   #composer { padding: 12px 16px; border-top: 1px solid var(--border); display: flex; flex-wrap: wrap; gap: 8px; background: var(--panel); }
   #input { flex: 1; border: 1px solid var(--border); border-radius: 20px; padding: 10px 16px; font-size: 15px; resize: none; font-family: inherit; background: var(--bg); color: var(--text); }
   #input:focus { outline: none; border-color: var(--accent); background: var(--panel); }
@@ -286,37 +404,68 @@
   #send:disabled { opacity: .5; cursor: default; }
   #mic { border: 1px solid var(--border); background: var(--panel); color: var(--text); width: 42px; border-radius: 20px; font-size: 16px; cursor: pointer; flex: none; }
   #mic.listening { background: #d9433f; color: #fff; border-color: #d9433f; animation: pulse 1.2s infinite; }
-  #rec-indicator { display: none; align-items: center; gap: 6px; padding: 5px 11px; border-radius: 999px; border: 1px solid rgba(255, 149, 0, .45); background: rgba(255, 149, 0, .14); color: #ff9500; font-size: 12px; font-weight: 600; letter-spacing: .3px; white-space: nowrap; }
-  #rec-indicator.on { display: inline-flex; }
-  #rec-indicator .dot { width: 7px; height: 7px; border-radius: 50%; background: #ff9500; animation: recPulse 1.3s infinite; }
-  @keyframes recPulse { 0%, 100% { box-shadow: 0 0 0 0 rgba(255, 149, 0, .5); } 50% { box-shadow: 0 0 0 6px rgba(255, 149, 0, 0); } }
-  #podcast-bar { display: none; align-items: center; gap: 8px; padding: 8px 14px; border-top: 1px solid var(--border); background: var(--panel); font-size: 13px; color: var(--muted); flex-wrap: wrap; }
+  #mic.heard { background: #34c759; color: #fff; border-color: #34c759; }
+  #mic.transcribing { background: #f5a623; color: #fff; border-color: #f5a623; }
+  #mic-level-track { display: none; width: 40px; height: 4px; border-radius: 2px; background: var(--seg-bg); overflow: hidden; flex: none; align-self: center; }
+  #mic-level { display: block; height: 100%; width: 0; background: #34c759; border-radius: 2px; transition: width .12s; }
+  #podcast-bar { display: none; align-items: center; gap: 8px; padding: 8px 14px; border-top: 1px solid var(--border); background: var(--panel); font-size: 13px; color: var(--muted); flex-wrap: wrap; position: relative; }
   #podcast-bar.show { display: flex; }
   #podcast-status { flex: 1; min-width: 110px; color: var(--text); }
   #podcast-bar select, #podcast-bar button { border: 1px solid var(--border); background: var(--seg-bg); color: var(--text); font-size: 12px; padding: 4px 10px; border-radius: 8px; cursor: pointer; }
   #podcast-bar button:hover { border-color: var(--accent); color: var(--accent); }
+  #podcast-more-menu { position: absolute; right: 10px; bottom: calc(100% + 6px); z-index: 25; display: none; flex-direction: column; gap: 2px; min-width: 130px; padding: 6px; background: var(--panel); border: 1px solid var(--border); border-radius: 10px; box-shadow: 0 6px 20px var(--shadow); }
+  #podcast-more-menu.show { display: flex; }
+  #podcast-more-menu button { border: none; background: transparent; color: var(--text); font-size: 12.5px; padding: 6px 8px; border-radius: 6px; cursor: pointer; text-align: left; }
+  #podcast-more-menu button:hover { background: var(--seg-bg); color: var(--accent); }
   #podcast-auto.on { color: #fff; background: var(--accent); border-color: var(--accent); }
   #podcast-audio { height: 34px; flex: 1; min-width: 160px; }
-  #podcast-options { display: none; padding: 10px 14px; border-top: 1px solid var(--border); background: var(--panel); font-size: 13px; color: var(--muted); }
-  #podcast-options.show { display: block; }
-  #podcast-options .po-row { display: flex; align-items: center; gap: 8px; margin: 6px 0; }
-  #podcast-options label, #podcast-options .po-label { min-width: 52px; color: var(--muted); flex: none; }
-  #podcast-options select, #podcast-options textarea, #podcast-options button { border: 1px solid var(--border); background: var(--seg-bg); color: var(--text); font-size: 12px; padding: 4px 10px; border-radius: 8px; }
-  #podcast-options textarea { flex: 1; font-family: inherit; resize: vertical; }
-  #podcast-options button { cursor: pointer; }
-  #podcast-options button:hover { border-color: var(--accent); color: var(--accent); }
-  #podcast-ch-list { max-height: 180px; overflow-y: auto; margin-top: 6px; border: 1px solid var(--border); border-radius: 8px; padding: 6px 10px; }
-  #podcast-ch-list label { display: flex; align-items: baseline; gap: 6px; padding: 2px 0; cursor: pointer; color: var(--text); min-width: 0; }
+  /* 生成播客：居中卡片弹窗（复用设置面板视觉语言） */
+  #podcast-options-overlay { position: fixed; inset: 0; z-index: 210; display: none; align-items: center; justify-content: center; background: rgba(0,0,0,.45); }
+  #podcast-options-overlay.show { display: flex; animation: fade-in .2s var(--ease-out); }
+  #podcast-options { width: min(460px, 92vw); max-height: 88vh; overflow-y: auto; background: var(--panel); border: 1px solid var(--border); border-radius: 14px; box-shadow: 0 12px 40px rgba(0,0,0,.3); padding: 18px; animation: pop-in .26s var(--ease-spring); }
+  #podcast-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px; }
+  #podcast-title { font-size: 16px; font-weight: 700; color: var(--text); }
+  #podcast-options-close { border: none; background: transparent; color: var(--muted); font-size: 16px; cursor: pointer; }
+  #podcast-options-close:hover { color: var(--accent); }
+  #podcast-options .po-label { display: block; font-size: 12px; color: var(--muted); margin: 12px 0 6px; }
+  .pf-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .pf-card { text-align: left; border: 1px solid var(--border); background: var(--bg); color: var(--text); border-radius: 10px; padding: 10px 12px; cursor: pointer; display: flex; flex-direction: column; gap: 3px; }
+  .pf-card:hover { border-color: var(--accent); }
+  .pf-card.sel { border-color: var(--accent); background: var(--accent-soft); }
+  .pf-name { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; font-weight: 600; }
+  .pf-name .ic { color: var(--accent); }
+  .pf-desc { font-size: 11.5px; color: var(--muted); line-height: 1.45; }
+  .seg-group { display: flex; gap: 6px; }
+  .seg-group button { flex: 1; border: 1px solid var(--border); background: var(--bg); color: var(--text); font-size: 13px; padding: 8px 0; border-radius: 8px; cursor: pointer; }
+  .seg-group button:hover { border-color: var(--accent); color: var(--accent); }
+  .seg-group button.sel { border-color: var(--accent); background: var(--accent-soft); color: var(--accent); font-weight: 600; }
+  .po-ch-row { display: flex; align-items: center; gap: 8px; }
+  .po-count { flex: 1; color: var(--text); font-size: 13px; }
+  .po-ch-row button { border: 1px solid var(--border); background: var(--bg); color: var(--text); font-size: 12.5px; padding: 5px 10px; border-radius: 8px; cursor: pointer; }
+  .po-ch-row button:hover { border-color: var(--accent); color: var(--accent); }
+  #podcast-ch-list { max-height: 200px; overflow-y: auto; margin-top: 8px; border: 1px solid var(--border); border-radius: 10px; padding: 8px 12px; }
+  #podcast-ch-list label { display: flex; align-items: baseline; gap: 8px; padding: 3px 0; cursor: pointer; color: var(--text); min-width: 0; user-select: none; -webkit-user-select: none; font-size: 13px; }
+  #podcast-ch-list.drag-sel { cursor: ns-resize; }
   #podcast-ch-list input { margin: 0; }
-  #podcast-library { display: none; padding: 8px 14px; border-top: 1px solid var(--border); background: var(--panel); font-size: 12px; }
-  #podcast-library.show { display: block; }
-  .podcast-lib-list { max-height: 200px; overflow-y: auto; }
-  .podcast-lib-item { display: flex; align-items: center; gap: 8px; padding: 5px 0; border-bottom: 1px solid var(--border); }
-  .podcast-lib-item .pdl-title { flex: 1; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .podcast-lib-item .pdl-meta { color: var(--muted); flex: none; }
-  .podcast-lib-item button { border: 1px solid var(--border); background: var(--seg-bg); color: var(--text); font-size: 12px; padding: 2px 8px; border-radius: 6px; cursor: pointer; }
-  .podcast-lib-item button:hover { border-color: var(--accent); color: var(--accent); }
-  .pdl-empty { color: var(--muted); padding: 8px 0; }
+  #podcast-instr { width: 100%; box-sizing: border-box; border: 1px solid var(--border); background: var(--bg); color: var(--text); font-size: 13px; padding: 8px 10px; border-radius: 10px; font-family: inherit; resize: vertical; }
+  #podcast-instr:focus { outline: none; border-color: var(--accent); }
+  #podcast-make { width: 100%; margin-top: 16px; border: none; background: var(--accent); color: #fff; font-size: 15px; font-weight: 600; padding: 12px 0; border-radius: 12px; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; gap: 7px; }
+  #podcast-make:hover { opacity: .92; }
+  #podcast-library { display: none; padding: 10px 14px; border-top: 1px solid var(--border); background: var(--panel); font-size: 12px; }
+  #podcast-library.show { display: block; animation: rise-in .2s var(--ease-out); }
+  .podcast-lib-head { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
+  .podcast-lib-head .po-label { flex: 1; color: var(--muted); font-size: 12px; }
+  .podcast-lib-head button { border: 1px solid var(--border); background: var(--bg); color: var(--text); font-size: 12px; padding: 4px 10px; border-radius: 7px; cursor: pointer; }
+  .podcast-lib-head button:hover { border-color: var(--accent); color: var(--accent); }
+  .podcast-lib-list { max-height: 240px; overflow-y: auto; display: flex; flex-direction: column; gap: 8px; }
+  .podcast-lib-item { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border: 1px solid var(--border); background: var(--bg); border-radius: 10px; }
+  .podcast-lib-item .pdl-title { flex: 1; color: var(--text); font-size: 13px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .podcast-lib-item .pdl-meta { color: var(--muted); flex: none; font-size: 11.5px; }
+  .podcast-lib-item .pdl-play { border: none; background: var(--accent); color: #fff; width: 30px; height: 30px; border-radius: 50%; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; flex: none; }
+  .podcast-lib-item .pdl-play:hover { opacity: .9; }
+  .podcast-lib-item .pdl-icon { border: 1px solid var(--border); background: var(--panel); color: var(--text); width: 28px; height: 28px; border-radius: 8px; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; flex: none; }
+  .podcast-lib-item .pdl-icon:hover { border-color: var(--accent); color: var(--accent); }
+  .pdl-empty { color: var(--muted); padding: 12px 0; text-align: center; }
   @keyframes pulse { 0%, 100% { box-shadow: 0 0 0 0 rgba(217, 67, 63, .35); } 50% { box-shadow: 0 0 0 6px rgba(217, 67, 63, 0); } }
 
   /* 选中浮动条 */
@@ -341,20 +490,64 @@
 </head>
 <body>
 <div id="app">
+  <nav id="rail">
+    <div id="rail-toggle" title="折叠 / 展开侧栏"></div>
+    <div id="rail-body">
+      <div class="rail-sec">
+        <div class="rail-sec-title" data-icon="book-open" data-icon-size="sm">书籍</div>
+        <button id="rail-import" data-icon="plus" title="导入一本新书（PDF/EPUB/MD/TXT）">导入新书</button>
+        <div id="rail-books"></div>
+      </div>
+      <div class="rail-sec">
+        <div class="rail-sec-title" data-icon="bookmark" data-icon-size="sm">批注 · 书签</div>
+        <div id="rail-overview"></div>
+      </div>
+    </div>
+    <div id="rail-mini">
+      <button class="rail-mini-btn" data-icon="plus" id="mini-import" title="导入新书"></button>
+      <button class="rail-mini-btn" data-icon="list" id="mini-timeline" title="时间轴 · 批注书签"></button>
+      <button class="rail-mini-btn" data-icon="radio" id="mini-podcast" title="播客"></button>
+      <button class="rail-mini-btn" data-icon="settings" id="mini-settings" title="设置"></button>
+    </div>
+  </nav>
   <aside id="sidebar">
     <div id="book-header">
       <div id="book-title" title="选中正文可「追问 / 高亮 / 笔记」；点答案里的来源可跳回对应章节">加载中…</div>
-      <div id="book-hint">选中正文可「追问 / 高亮 / 笔记」；点答案里的来源跳回章节</div>
-      <select id="book-select" title="切换书"></select>
-      <button id="import-btn" title="导入一本新书（PDF/EPUB/MD/TXT）">＋导入</button>
       <input type="file" id="import-file" accept=".pdf,.epub,.md,.txt,.docx" style="display:none">
       <button id="toc-toggle" title="章节目录">目录</button>
       <button id="key-toggle" title="中心句：标出每段最值得读的一句，其余变淡">中心句</button>
+      <button id="reading-btn" title="阅读设置：字号 / 背景 / 行距">Aa</button>
+      <div id="reading-panel">
+        <div class="rp-row">
+          <span class="rp-label">字号</span>
+          <button id="rp-font-down" title="减小字号">A−</button>
+          <span id="rp-font-val">17</span>
+          <button id="rp-font-up" title="增大字号">A+</button>
+        </div>
+        <div class="rp-row">
+          <span class="rp-label">背景</span>
+          <div class="rp-swatches">
+            <button class="rp-swatch auto active" data-paper="" title="跟随主题"></button>
+            <button class="rp-swatch white" data-paper="white" title="纯白"></button>
+            <button class="rp-swatch cream" data-paper="cream" title="米黄"></button>
+            <button class="rp-swatch green" data-paper="green" title="护眼绿"></button>
+            <button class="rp-swatch parchment" data-paper="parchment" title="羊皮纸"></button>
+            <button class="rp-swatch dark" data-paper="dark" title="暗色"></button>
+          </div>
+        </div>
+        <div class="rp-row">
+          <span class="rp-label">行距</span>
+          <div class="rp-seg">
+            <button data-lh="1.6">紧凑</button>
+            <button data-lh="1.9" class="active">标准</button>
+            <button data-lh="2.3">宽松</button>
+          </div>
+        </div>
+      </div>
     </div>
     <div id="toc" style="display:none">
       <input id="toc-search" type="search" placeholder="搜索章节…" title="输入关键字过滤目录">
       <div id="toc-list"></div>
-      <div id="toc-bm"></div>
     </div>
     <div id="book-content"></div>
     <div id="flashlight"></div>
@@ -362,12 +555,11 @@
       <div id="progress-bar" title="点击回到上次读到的地方"><div id="progress-fill"></div><div id="progress-ticks"></div></div>
       <div id="progress-label">覆盖 0%</div>
       <div id="guide-row">
-        <button id="guide-open" title="跟着读：AI 带你一段一段往下读，读完聊聊 / 考考你">▶ 跟着读</button>
+        <button id="guide-open" data-icon="play" title="跟着读：AI 带你一段一段往下读，读完聊聊 / 考考你">跟着读</button>
         <button id="guide-recap-btn" title="我读到哪了？30 秒找回上下文">复盘</button>
       </div>
       <div id="flash-controls" style="display:none">
-        <span class="fc-label">光圈</span><input id="flash-radius" type="range" min="60" max="400" value="160" title="光圈大小">
-        <span class="fc-label">弥散</span><input id="flash-soft" type="range" min="0" max="100" value="40" title="光边缘柔和程度">
+        <span class="fc-hint">触控板捏合 / ⌘滚轮 / ↑↓ 调光圈</span>
         <span class="fc-label">形状</span>
         <div id="flash-shape"><button data-shape="circle" class="active" title="圆形光斑">圆</button><button data-shape="band" title="横向光带（逐行读）">横带</button></div>
       </div>
@@ -376,11 +568,13 @@
       <div id="guide-head">
         <div id="guide-title">跟着读</div>
         <button id="guide-hl-toggle" class="on" title="开关当前段落高亮">高亮</button>
-        <button id="guide-close" title="关闭">✕</button>
+        <button id="guide-close" data-icon="x" title="关闭"></button>
       </div>
       <div id="guide-chunk">
         <div id="guide-chunk-heading"></div>
         <div id="guide-chunk-preview"></div>
+        <button id="guide-src-toggle" title="看这段的原文" style="display:none">看原文</button>
+        <div id="guide-chunk-src" style="display:none"></div>
       </div>
       <div id="guide-body"></div>
       <div id="guide-answer-wrap" style="display:none">
@@ -390,7 +584,7 @@
       <div id="guide-actions">
         <button id="guide-discuss">聊聊这段</button>
         <button id="guide-quiz">考考我</button>
-        <button id="guide-next">下一段 →</button>
+        <button id="guide-next" data-icon-after="chevron-right">下一段</button>
       </div>
     </div>
     <div id="toast"></div>
@@ -401,60 +595,74 @@
         <button class="tab active" data-tab="chat">对话</button>
         <button class="tab" data-tab="notes">笔记</button>
       </div>
-      <button id="podcast" title="双人播客：读完全书后生成一段两个主播的对谈音频">🎙️ 播客</button>
-      <button id="settings-btn" title="设置：API Key / 人设 / 深度 / 显示模式">⚙️ 设置</button>
-      <div id="rec-indicator" title="麦克风正在录音"><span class="dot"></span>录音中</div>
+      <div id="mode-wrap" title="显示模式">
+        <button id="mode-toggle"></button>
+        <div id="mode-menu">
+          <button data-mode="light" data-icon="sun">日间</button>
+          <button data-mode="dark" data-icon="moon">暗夜</button>
+          <button data-mode="flash" data-icon="flashlight">手电筒</button>
+        </div>
+      </div>
+      <button id="podcast" data-icon="radio" title="双人播客：读完全书后生成一段两个主播的对谈音频">播客</button>
+      <button id="settings-btn" data-icon="settings" title="设置：API Key / 人设 / 深度">设置</button>
     </div>
     <div id="messages"></div>
-    <div id="podcast-options">
-      <div class="po-row">
-        <label for="podcast-format">格式</label>
-        <select id="podcast-format">
-          <option value="deep" selected>深度对谈 · 双主播</option>
-          <option value="brief">简报 · 单主播 2 分钟</option>
-          <option value="critique">批判点评 · 双主播</option>
-          <option value="debate">辩论 · 双主播</option>
-        </select>
-      </div>
-      <div class="po-row">
-        <span class="po-label">篇章</span>
-        <span id="podcast-ch-count">全部章节</span>
-        <button id="podcast-ch-toggle">选篇章</button>
-      </div>
-      <div id="podcast-ch-wrap" style="display:none">
-        <div class="po-row" style="justify-content:flex-end">
-          <button id="podcast-ch-clear">清空（= 全书）</button>
+    <div id="podcast-options-overlay">
+      <div id="podcast-options">
+        <div id="podcast-head">
+          <div id="podcast-title">生成播客</div>
+          <button id="podcast-options-close" data-icon="x" title="关闭"></button>
         </div>
-        <div id="podcast-ch-list"></div>
-      </div>
-      <div class="po-row">
-        <label for="podcast-instr">方向</label>
-        <textarea id="podcast-instr" rows="2" placeholder="可选：只讲某几章 / 面向完全不懂的新手 / 聊这本书对创业的启发…"></textarea>
+        <div class="po-label">格式</div>
+        <div class="pf-grid">
+          <button class="pf-card sel" data-fmt="deep"><span class="pf-name"><span data-icon="message-square" data-icon-size="sm"></span>深度对谈</span><span class="pf-desc">双主播 · 围绕全书深入对谈</span></button>
+          <button class="pf-card" data-fmt="brief"><span class="pf-name"><span data-icon="zap" data-icon-size="sm"></span>简报</span><span class="pf-desc">单主播 · 2 分钟快速讲清</span></button>
+          <button class="pf-card" data-fmt="critique"><span class="pf-name"><span data-icon="sparkles" data-icon-size="sm"></span>批判点评</span><span class="pf-desc">双主播 · 挑剔拆解观点</span></button>
+          <button class="pf-card" data-fmt="debate"><span class="pf-name"><span data-icon="quote" data-icon-size="sm"></span>辩论</span><span class="pf-desc">双主播 · 正反方激辩议题</span></button>
+        </div>
+        <div class="po-label">时长</div>
+        <div class="seg-group" id="podcast-len-group">
+          <button data-len="short">5 分钟</button>
+          <button data-len="medium" class="sel">8 分钟</button>
+          <button data-len="long">12 分钟</button>
+        </div>
+        <div class="po-label">篇章</div>
+        <div class="po-ch-row">
+          <span class="po-count" id="podcast-ch-count">全部章节</span>
+          <button id="podcast-ch-toggle">选篇章</button>
+        </div>
+        <div id="podcast-ch-wrap" style="display:none">
+          <div class="po-ch-row" style="justify-content:flex-end">
+            <button id="podcast-ch-clear">清空（= 全书）</button>
+          </div>
+          <div id="podcast-ch-list"></div>
+        </div>
+        <div class="po-label">方向（可选）</div>
+        <textarea id="podcast-instr" rows="2" placeholder="只讲某几章 / 面向完全不懂的新手 / 聊这本书对创业的启发…"></textarea>
+        <button id="podcast-make" data-icon="radio">生成</button>
       </div>
     </div>
     <div id="podcast-library">
-      <div class="po-row"><span class="po-label">播客库</span><button id="podcast-lib-refresh">刷新</button></div>
+      <div class="podcast-lib-head"><span class="po-label">播客库</span><button id="podcast-lib-refresh" data-icon="history">刷新</button></div>
       <div id="podcast-lib-list" class="podcast-lib-list"></div>
     </div>
     <div id="podcast-bar">
       <span id="podcast-status">双人播客</span>
-      <button id="podcast-options-btn" title="自定义：格式 / 篇章 / 方向">⚙ 自定义</button>
-      <button id="podcast-lib-btn" title="已保存的播客">📚 库</button>
-      <select id="podcast-len" title="时长">
-        <option value="short">5 分钟</option>
-        <option value="medium" selected>8 分钟</option>
-        <option value="long">12 分钟</option>
-      </select>
-      <button id="podcast-make">生成</button>
       <audio id="podcast-audio" controls style="display:none"></audio>
-      <button id="podcast-interrupt" style="display:none" title="插嘴：暂停播客，你说话，两位主播答你，然后继续播">🎤 插嘴</button>
-      <button id="podcast-auto" style="display:none" title="自动插嘴：播客播放时保持监听，你一开口就暂停回答（建议戴耳机，避免麦克风收到播客声）">🎧 自动插嘴</button>
-      <button id="podcast-download" style="display:none">下载 mp3</button>
-      <button id="podcast-close">✕</button>
+      <button id="podcast-interrupt" style="display:none" data-icon="mic" title="插嘴：暂停播客，你说话，两位主播答你，然后继续播">插嘴</button>
+      <button id="podcast-auto" style="display:none" data-icon="headphones" title="自动插嘴：播客播放时保持监听，你一开口就暂停回答（建议戴耳机，避免麦克风收到播客声）">自动插嘴</button>
+      <button id="podcast-more" title="更多：自定义 / 播客库 / 下载">⋯</button>
+      <button id="podcast-close" data-icon="x"></button>
+    </div>
+    <div id="podcast-more-menu">
+      <button id="podcast-options-btn" data-icon="settings">自定义</button>
+      <button id="podcast-lib-btn" data-icon="book-open">播客库</button>
+      <button id="podcast-download" style="display:none" data-icon="download">下载 mp3</button>
     </div>
     <div id="composer">
-      <div id="reply-chip"><span id="reply-label"></span><button id="reply-cancel" title="取消追问">✕</button></div>
-      <button id="mic" title="语音插嘴（点一下：打断 AI，说完自动发送）">🎤</button>
+      <div id="reply-chip"><span id="reply-label"></span><button id="reply-cancel" data-icon="x" title="取消追问"></button></div>
+      <button id="mic" data-icon="mic" title="语音插嘴（点一下开始收音，说完自动转写并发送）"></button>
+      <span id="mic-level-track"><span id="mic-level"></span></span>
       <textarea id="input" rows="1" placeholder="问这本书任何问题，回车发送（Shift+回车换行）"></textarea>
       <button id="send">发送</button>
     </div>
@@ -465,7 +673,7 @@
         <button id="note-download">下载 .md</button>
         <button id="note-download-html">导出 HTML</button>
         <button id="note-copy">复制</button>
-        <button id="note-organize" title="把零散笔记按章节整理成能回看的笔记，可撤销">✨ 自动整理</button>
+        <button id="note-organize" data-icon="sparkles" title="把零散笔记按章节整理成能回看的笔记，可撤销">自动整理</button>
         <span id="notes-status"></span>
       </div>
       <div id="notes-editor"></div>
@@ -485,7 +693,7 @@
   <div id="settings-panel">
     <div id="settings-head">
       <div id="settings-title">设置</div>
-      <button id="settings-close" title="关闭">✕</button>
+      <button id="settings-close" data-icon="x" title="关闭"></button>
     </div>
     <div class="settings-sec">
       <div class="settings-label">API Key（DeepSeek）</div>
@@ -507,14 +715,6 @@
       </select>
     </div>
     <div class="settings-sec">
-      <div class="settings-label">显示模式</div>
-      <div id="theme-switch" title="显示模式">
-        <button data-mode="light" title="日间">☀️</button>
-        <button data-mode="dark" title="暗夜">🌙</button>
-        <button data-mode="flash" title="手电筒">🔦</button>
-      </div>
-    </div>
-    <div class="settings-sec">
       <div class="settings-label">朗读音色（书 AI）</div>
       <select id="read-voice" title="聊天回答朗读用的音色，跟两位主播区分开">
         <option value="zh-CN-YunjianNeural">男声 · 云健</option>
@@ -531,6 +731,50 @@
   const messages = $('messages');
   const input = $('input');
   const selbar = $('selbar');
+
+  // ---------- 统一图标（Lucide 风格内联 SVG，currentColor 随主题变色）----------
+  const ICONS = {
+    'book-open': '<path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/>',
+    'bookmark': '<path d="m19 21-7-4-7 4V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v16z"/>',
+    'play': '<polygon points="6 3 20 12 6 21 6 3"/>',
+    'chevron-right': '<polyline points="9 18 15 12 9 6"/>',
+    'chevron-left': '<polyline points="15 18 9 12 15 6"/>',
+    'chevron-down': '<polyline points="6 9 12 15 18 9"/>',
+    'x': '<path d="M18 6 6 18"/><path d="m6 6 12 12"/>',
+    'settings': '<line x1="21" x2="14" y1="4" y2="4"/><line x1="10" x2="3" y1="4" y2="4"/><line x1="21" x2="12" y1="12" y2="12"/><line x1="8" x2="3" y1="12" y2="12"/><line x1="21" x2="16" y1="20" y2="20"/><line x1="12" x2="3" y1="20" y2="20"/><line x1="14" x2="14" y1="2" y2="6"/><line x1="8" x2="8" y1="10" y2="14"/><line x1="16" x2="16" y1="18" y2="22"/>',
+    'radio': '<path d="M4.9 19.1C1 15.2 1 8.8 4.9 4.9"/><path d="M7.8 16.2c-2.3-2.3-2.3-6.1 0-8.5"/><circle cx="12" cy="12" r="2"/><path d="M16.2 7.8c2.3 2.3 2.3 6.1 0 8.5"/><path d="M19.1 4.9C23 8.8 23 15.2 19.1 19.1"/>',
+    'mic': '<path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" x2="12" y1="19" y2="22"/>',
+    'headphones': '<path d="M3 14h3a2 2 0 0 1 2 2v3a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-7a9 9 0 0 1 18 0v7a2 2 0 0 1-2 2h-1a2 2 0 0 1-2-2v-3a2 2 0 0 1 2-2h3"/>',
+    'download': '<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" x2="12" y1="15" y2="3"/>',
+    'sparkles': '<path d="m12 3-1.9 5.8a2 2 0 0 1-1.3 1.3L3 12l5.8 1.9a2 2 0 0 1 1.3 1.3L12 21l1.9-5.8a2 2 0 0 1 1.3-1.3L21 12l-5.8-1.9a2 2 0 0 1-1.3-1.3L12 3Z"/><path d="M5 3v4"/><path d="M19 17v4"/><path d="M3 5h4"/><path d="M17 19h4"/>',
+    'trash-2': '<path d="M3 6h18"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" x2="10" y1="11" y2="17"/><line x1="14" x2="14" y1="11" y2="17"/>',
+    'message-square': '<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>',
+    'sun': '<circle cx="12" cy="12" r="4"/><path d="M12 2v2"/><path d="M12 20v2"/><path d="m4.93 4.93 1.41 1.41"/><path d="m17.66 17.66 1.41 1.41"/><path d="M2 12h2"/><path d="M20 12h2"/><path d="m6.34 17.66-1.41 1.41"/><path d="m19.07 4.93-1.41 1.41"/>',
+    'moon': '<path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/>',
+    'flashlight': '<path d="M18 6c0 2-2 2-2 4v10a2 2 0 0 1-2 2h-4a2 2 0 0 1-2-2V10c0-2-2-2-2-4V2h12z"/><line x1="6" x2="18" y1="6" y2="6"/><line x1="12" x2="12" y1="12" y2="12"/>',
+    'plus': '<path d="M5 12h14"/><path d="M12 5v14"/>',
+    'list': '<line x1="8" x2="21" y1="6" y2="6"/><line x1="8" x2="21" y1="12" y2="12"/><line x1="8" x2="21" y1="18" y2="18"/><line x1="3" x2="3.01" y1="6" y2="6"/><line x1="3" x2="3.01" y1="12" y2="12"/><line x1="3" x2="3.01" y1="18" y2="18"/>',
+    'volume-2': '<polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14"/>',
+    'lightbulb': '<path d="M15 14c.2-1 .7-1.7 1.5-2.5 1-.9 1.5-2.2 1.5-3.5A6 6 0 0 0 6 8c0 1 .2 2.2 1.5 3.5.7.7 1.3 1.5 1.5 2.5"/><path d="M9 18h6"/><path d="M10 22h4"/>',
+    'quote': '<path d="M3 21c3 0 7-1 7-8V5c0-1.25-.756-2.017-2-2H4c-1.25 0-2 .75-2 1.972V11c0 1.25.75 2 2 2 1 0 1 0 1 1v1c0 1-1 2-2 2s-1 .008-1 1.031V20c0 1 0 1 1 1z"/><path d="M15 21c3 0 7-1 7-8V5c0-1.25-.757-2.017-2-2h-4c-1.25 0-2 .75-2 1.972V11c0 1.25.75 2 2 2h.75c0 2.25.25 4-2.75 4v3c0 1 0 1 1 1z"/>',
+    'history': '<path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/><path d="M12 7v5l4 2"/>',
+    'type': '<polyline points="4 7 4 4 20 4 20 7"/><line x1="9" x2="15" y1="20" y2="20"/><line x1="12" x2="12" y1="4" y2="20"/>',
+    'zap': '<polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>',
+  };
+  function icon(name, size) {
+    const body = ICONS[name] || '';
+    return '<svg class="ic' + (size === 'sm' ? ' ic-sm' : '') + '" viewBox="0 0 24 24" aria-hidden="true">' + body + '</svg>';
+  }
+  function decorateIcons() {
+    document.querySelectorAll('[data-icon]').forEach(el => {
+      const hasText = el.textContent.trim().length > 0;
+      el.insertAdjacentHTML('afterbegin', icon(el.dataset.icon, el.dataset.iconSize) + (hasText ? ' ' : ''));
+      if (!hasText) el.classList.add('ic-only');
+    });
+    document.querySelectorAll('[data-icon-after]').forEach(el => {
+      el.insertAdjacentHTML('beforeend', ' ' + icon(el.dataset.iconAfter, el.dataset.iconSize));
+    });
+  }
 
   function esc(s) {
     return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
@@ -610,10 +854,10 @@
     if (!tools || tools.querySelector('.collapse')) return;
     const b = document.createElement('button');
     b.className = 'collapse';
-    b.textContent = '▾ 收起';
+    b.innerHTML = icon('chevron-down', 'sm') + ' 收起';
     b.addEventListener('click', () => {
       const collapsed = parentMsg.classList.toggle('collapsed');
-      b.textContent = collapsed ? '▸ 展开' : '▾ 收起';
+      b.innerHTML = collapsed ? icon('chevron-right', 'sm') + ' 展开' : icon('chevron-down', 'sm') + ' 收起';
     });
     tools.appendChild(b);
   }
@@ -641,7 +885,11 @@
     syncVditorTheme(mode);
     $('flashlight').style.display = flash ? 'block' : 'none';
     $('flash-controls').style.display = flash ? '' : 'none';
-    document.querySelectorAll('#theme-switch button').forEach(b => b.classList.toggle('active', b.dataset.mode === mode));
+    const modeIcon = { light: 'sun', dark: 'moon', flash: 'flashlight' }[mode];
+    const modeLabel = { light: '日间', dark: '暗夜', flash: '手电筒' }[mode];
+    $('mode-toggle').innerHTML = icon(modeIcon);
+    $('mode-toggle').title = modeLabel;
+    document.querySelectorAll('#mode-menu button').forEach(b => b.classList.toggle('active', b.dataset.mode === mode));
     if (flash) { initFlashPos(); startFlashlight(); } else { stopFlashlight(); }
   }
   function initTheme() {
@@ -652,23 +900,29 @@
     }
     setMode(mode);
   }
-  document.querySelectorAll('#theme-switch button').forEach(b => b.addEventListener('click', () => setMode(b.dataset.mode)));
+  document.querySelectorAll('#mode-menu button').forEach(b => b.addEventListener('click', () => setMode(b.dataset.mode)));
 
   // 手电筒：灯光跟随指针（rAF 平滑拖尾；减少动效偏好则直接贴到指针）
   const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
   let flashTarget = { x: 0, y: 0 }, flashCur = { x: 0, y: 0 }, flashRAF = null;
+  // 光圈大小：三套手势（触控板捏合 / Cmd+滚轮 / ↑↓）统一驱动；弥散固定默认值，不再手动调
+  const FLASH_R_MIN = 60, FLASH_R_MAX = 460;
+  let flashRadius = 160;
+  try { const s = Number(localStorage.getItem('bt-flash-radius')); if (s >= FLASH_R_MIN && s <= FLASH_R_MAX) flashRadius = s; } catch (e) {}
+  function setFlashRadius(px) {
+    flashRadius = Math.max(FLASH_R_MIN, Math.min(FLASH_R_MAX, px));
+    $('flashlight').style.setProperty('--fr', flashRadius + 'px');
+    try { localStorage.setItem('bt-flash-radius', String(flashRadius)); } catch (e) {}
+  }
+  function nudgeFlashRadius(delta) { setFlashRadius(flashRadius + delta); }
   function applyFlashShape() {
     const band = document.querySelector('#flash-shape button.active');
     $('flashlight').style.setProperty('--aspect', (band && band.dataset.shape === 'band') ? '3.2' : '1');
   }
-  function applyFlashSoft() {
-    $('flashlight').style.setProperty('--core', (100 - $('flash-soft').value * 0.85) + '%');
-  }
   function initFlashPos() {
     const fl = $('flashlight');
-    fl.style.setProperty('--fr', $('flash-radius').value + 'px');
+    setFlashRadius(flashRadius);
     applyFlashShape();
-    applyFlashSoft();
     const r = fl.getBoundingClientRect();
     flashTarget.x = flashCur.x = r.width / 2;
     flashTarget.y = flashCur.y = r.height * 0.4;
@@ -705,42 +959,82 @@
       startFlashlight();
     }
   });
-  $('flash-radius').addEventListener('input', () => $('flashlight').style.setProperty('--fr', $('flash-radius').value + 'px'));
-  $('flash-soft').addEventListener('input', applyFlashSoft);
+  // 光圈：触控板双指捏合 / 鼠标 Cmd(Ctrl)+滚轮（同一 wheel 事件，pinch 也会带 ctrlKey）
+  bookContent.addEventListener('wheel', (e) => {
+    if (currentMode !== 'flash') return;
+    if (e.ctrlKey || e.metaKey) { e.preventDefault(); nudgeFlashRadius(-e.deltaY * 0.5); }
+  }, { passive: false });
+  // 光圈：键盘 ↑↓（仅手电筒模式，不拦输入框）
+  document.addEventListener('keydown', (e) => {
+    if (currentMode !== 'flash') return;
+    const t = e.target;
+    if (t && (t.tagName === 'TEXTAREA' || t.tagName === 'INPUT' || t.isContentEditable)) return;
+    if (e.key === 'ArrowUp') { e.preventDefault(); nudgeFlashRadius(12); }
+    else if (e.key === 'ArrowDown') { e.preventDefault(); nudgeFlashRadius(-12); }
+  });
   document.querySelectorAll('#flash-shape button').forEach(b => b.addEventListener('click', () => {
     document.querySelectorAll('#flash-shape button').forEach(x => x.classList.toggle('active', x === b));
     applyFlashShape();
   }));
+
+  // ---------- 正文阅读设置（Aa）：字号 / 背景 / 行距，正交于主题模式 ----------
+  const reading = loadJSON('bt-reading', { size: 17, lh: 1.9, paper: '' });
+  function applyReading() {
+    const root = document.documentElement;
+    root.style.setProperty('--book-font-size', reading.size + 'px');
+    root.style.setProperty('--book-line-height', String(reading.lh));
+    const side = $('sidebar');
+    if (reading.paper) side.setAttribute('data-paper', reading.paper); else side.removeAttribute('data-paper');
+    const val = $('rp-font-val'); if (val) val.textContent = reading.size;
+    document.querySelectorAll('.rp-swatch').forEach(s => s.classList.toggle('active', (s.dataset.paper || '') === reading.paper));
+    document.querySelectorAll('#reading-panel .rp-seg button').forEach(b => b.classList.toggle('active', Number(b.dataset.lh) === reading.lh));
+  }
+  function saveReading() { saveJSON('bt-reading', reading); applyReading(); }
+  function readingSize(delta) { reading.size = Math.max(13, Math.min(24, reading.size + delta)); saveReading(); }
+  $('reading-btn').addEventListener('click', (e) => { e.stopPropagation(); $('reading-panel').classList.toggle('show'); });
+  $('rp-font-down').addEventListener('click', () => readingSize(-1));
+  $('rp-font-up').addEventListener('click', () => readingSize(1));
+  document.querySelectorAll('.rp-swatch').forEach(s => s.addEventListener('click', () => { reading.paper = s.dataset.paper || ''; saveReading(); }));
+  document.querySelectorAll('#reading-panel .rp-seg button').forEach(b => b.addEventListener('click', () => { reading.lh = Number(b.dataset.lh); saveReading(); }));
+  document.addEventListener('click', (e) => { if (!$('reading-panel').contains(e.target) && e.target !== $('reading-btn')) $('reading-panel').classList.remove('show'); });
 
   // ---------- 书：列表 / 切换 / 导入 ----------
   async function refreshBooks() {
     try {
       const res = await fetch('/api/books');
       const list = await res.json();
-      const sel = $('book-select');
-      sel.innerHTML = '';
-      list.forEach(b => {
-        const o = document.createElement('option');
-        o.value = b.name;
-        o.textContent = b.name;
-        sel.appendChild(o);
-      });
       return list.map(b => b.name);
     } catch (e) { return []; }
   }
   async function loadBook(name) {
     const names = await refreshBooks();
-    const target = name || $('book-select').value || (names[0] || '');
+    const target = name || (names[0] || '');
     if (!target) {
-      $('book-title').textContent = '还没有导入书';
-      $('book-select').style.display = 'none';
-      bookContent.innerHTML = '<p class="seg">点右上角「＋导入」上传一本 PDF / EPUB / MD / TXT。</p>';
-      messages.innerHTML = '';
+      $('book-title').textContent = '还没有书';
+      bookContent.innerHTML =
+        '<div class="empty-state">' +
+          '<div class="empty-icon">' + icon('book-open') + '</div>' +
+          '<div class="empty-title">这里还没有书</div>' +
+          '<div class="empty-sub">丢一本 PDF / EPUB / MD / TXT 进来，我边读边陪你聊。</div>' +
+          '<button class="empty-cta" id="empty-import">' + icon('plus') + ' 导入第一本书</button>' +
+          '<div class="empty-formats">支持 PDF · EPUB · MD · TXT · DOCX</div>' +
+        '</div>';
+      $('empty-import').addEventListener('click', () => $('import-file').click());
+      messages.innerHTML =
+        '<div class="welcome">' +
+          '<div class="welcome-title">你好，我是你的读书搭子</div>' +
+          '<div class="welcome-sub">导入一本书之后，你可以：</div>' +
+          '<div class="empty-steps">' +
+            '<div class="empty-step"><span class="es-n">1</span> 划重点、记批注、加书签</div>' +
+            '<div class="empty-step"><span class="es-n">2</span> 随时问我，或点「跟着读」一段段读</div>' +
+            '<div class="empty-step"><span class="es-n">3</span> 读完让两位主播给你聊一期播客</div>' +
+          '</div>' +
+        '</div>';
+      renderRailBooks(names);
       return;
     }
-    $('book-select').style.display = '';
-    $('book-select').value = target;
     currentBook = target;
+    renderRailBooks(names);
     loadProgress();
     $('book-title').innerHTML = esc(target) + ' <span class="spinner"></span>';
     try {
@@ -781,15 +1075,13 @@
     await loadSession();
     if (vditor) loadNotes();
   }
-  $('book-select').addEventListener('change', () => switchBook($('book-select').value));
-  $('import-btn').addEventListener('click', () => $('import-file').click());
   $('import-file').addEventListener('change', async (e) => {
     const file = e.target.files && e.target.files[0];
     e.target.value = '';
     if (!file) return;
-    const btn = $('import-btn');
+    const btn = $('rail-import');
     btn.classList.add('importing');
-    btn.textContent = '导入中…';
+    btn.innerHTML = icon('plus') + ' 导入中…';
     $('book-title').innerHTML = '正在导入 ' + esc(file.name) + ' … <span class="spinner"></span>';
     try {
       const fd = new FormData();
@@ -798,12 +1090,12 @@
       const data = await res.json();
       if (!data.ok) throw new Error(data.error || '导入失败');
       btn.classList.remove('importing');
-      btn.textContent = '＋导入';
+      btn.innerHTML = icon('plus') + ' 导入新书';
       if (data.name === currentBook) await loadBook(data.name);   // 重导同一本：只刷新正文/索引
       else await switchBook(data.name);
     } catch (err) {
       btn.classList.remove('importing');
-      btn.textContent = '＋导入';
+      btn.innerHTML = icon('plus') + ' 导入新书';
       $('book-title').textContent = '导入失败：' + err;
     }
   });
@@ -818,7 +1110,15 @@
         const lvl = Math.min(h[1].length + 1, 6);
         html += '<h' + lvl + ' class="heading" id="hd-' + (hIdx++) + '">' + esc(h[2].trim()) + '</h' + lvl + '>';
       } else if (line.trim()) {
-        html += '<p class="seg" id="seg-' + (i++) + '">' + esc(line.trim()) + '</p>';
+        const img = line.match(/^!\[([^\]]*)\]\(([^)]+)\)\s*$/);
+        if (img) {
+          // PDF/EPUB 里的图片（REFERENCED 落盘），正文直接渲染，不占 seg 编号
+          const src = (img[2] || '').replace(/"/g, '&quot;');
+          const alt = (img[1] || '').replace(/"/g, '&quot;');
+          html += '<figure class="book-fig"><img class="book-img" src="' + src + '" alt="' + alt + '" loading="lazy"></figure>';
+        } else {
+          html += '<p class="seg" id="seg-' + (i++) + '">' + esc(line.trim()) + '</p>';
+        }
       }
     }
     bookContent.innerHTML = html;
@@ -883,7 +1183,10 @@
       item.dataset.title = h.textContent.trim().toLowerCase();
       item.addEventListener('click', () => {
         h.scrollIntoView({ behavior: 'smooth', block: 'start' });
-        updateTocActive();
+        syncChapterActive(h.id);
+        // 轴上的对应章节滚进视野，两边点哪跳到哪
+        const railCh = document.querySelector('#rail-overview .rl-ch[data-target="' + h.id + '"]');
+        if (railCh) railCh.scrollIntoView({ behavior: 'smooth', block: 'center' });
       });
       list.appendChild(item);
     });
@@ -911,7 +1214,25 @@
     const toc = $('toc');
     const show = toc.style.display === 'none';
     toc.style.display = show ? 'block' : 'none';
-    if (show) buildTOC();
+    if (show) { buildTOC(); updateTocActive(); }
+  }
+  // 当前所在章节：目录与阅读轴共用同一份参照，保证两边联动一致
+  function currentHeadingId() {
+    const bcTop = bookContent.getBoundingClientRect().top;
+    const heads = [...bookContent.querySelectorAll('.heading')];
+    let cur = null;
+    for (const h of heads) {
+      if (h.getBoundingClientRect().top - bcTop <= 48) cur = h;
+      else break;
+    }
+    return cur ? cur.id : null;
+  }
+  // 点目录 / 点轴上的章节后，把两边的「当前章节」高亮同步对齐
+  function syncChapterActive(id) {
+    document.querySelectorAll('#toc .toc-item').forEach(it =>
+      it.classList.toggle('active', it.dataset.target === id));
+    document.querySelectorAll('#rail-overview .rl-ch').forEach(ch =>
+      ch.classList.toggle('active', ch.dataset.target === id));
   }
   let tocRAF = null;
   function updateTocActive() {
@@ -919,19 +1240,24 @@
     if (tocRAF) return;
     tocRAF = requestAnimationFrame(() => {
       tocRAF = null;
-      const bcTop = bookContent.getBoundingClientRect().top;
-      const heads = [...bookContent.querySelectorAll('.heading')];
-      let cur = null;
-      for (const h of heads) {
-        if (h.getBoundingClientRect().top - bcTop <= 48) cur = h;
-        else break;
-      }
+      const cur = currentHeadingId();
       document.querySelectorAll('#toc .toc-item').forEach(it =>
-        it.classList.toggle('active', cur !== null && it.dataset.target === cur.id));
+        it.classList.toggle('active', cur !== null && it.dataset.target === cur));
+    });
+  }
+  let railActiveRAF = null;
+  function updateRailActive() {
+    if (railActiveRAF) return;
+    railActiveRAF = requestAnimationFrame(() => {
+      railActiveRAF = null;
+      const cur = currentHeadingId();
+      document.querySelectorAll('#rail-overview .rl-ch').forEach(ch =>
+        ch.classList.toggle('active', cur !== null && ch.dataset.target === cur));
     });
   }
   $('toc-toggle').addEventListener('click', toggleTOC);
   bookContent.addEventListener('scroll', updateTocActive);
+  bookContent.addEventListener('scroll', updateRailActive);
 
   // ---------- 高亮 ----------
   function applyHighlights() {
@@ -941,6 +1267,35 @@
   function saveHighlights() {
     const ids = [...document.querySelectorAll('.seg.hl')].map(p => p.id);
     saveJSON(hlKey(), ids);
+  }
+
+  // ---------- Dock 式悬停放大（macOS 任务栏效果） ----------
+  // 作用于「一排标记」（进度条刻度横向 / 左栏便签纵向）：鼠标靠近哪个，哪个按距离放大。
+  // 只写 CSS 变量 --dock，不动宽高、不触发重排；元素自身 CSS 里用 scale(var(--dock,1))。
+  function attachDockMagnify(container, itemSelector, opts) {
+    if (!container) return;
+    const maxScale = (opts && opts.maxScale) || 2;
+    const radius = (opts && opts.radius) || 80;
+    const axis = (opts && opts.axis) || 'x';
+    const items = () => container.querySelectorAll(itemSelector);
+    let raf = 0;
+    function apply(coord) {
+      items().forEach(el => {
+        const r = el.getBoundingClientRect();
+        const center = axis === 'y' ? (r.top + r.height / 2) : (r.left + r.width / 2);
+        const d = Math.abs(center - coord);
+        const t = Math.max(0, 1 - d / radius);
+        el.style.setProperty('--dock', (1 + (maxScale - 1) * t * t).toFixed(3));
+      });
+    }
+    container.addEventListener('mousemove', (e) => {
+      const coord = axis === 'y' ? e.clientY : e.clientX;
+      cancelAnimationFrame(raf);
+      raf = requestAnimationFrame(() => apply(coord));
+    });
+    container.addEventListener('mouseleave', () => {
+      items().forEach(el => el.style.setProperty('--dock', '1'));
+    });
   }
 
   // ---------- 书签 ----------
@@ -958,7 +1313,7 @@
     document.querySelectorAll('#book-content .seg.bm').forEach(s => s.classList.remove('bm'));
     bms.forEach(b => { const el = document.getElementById(b.segId); if (el) el.classList.add('bm'); });
     renderBookmarkTicks();
-    renderBookmarkList();
+    renderRailOverview();
   }
   function renderBookmarkTicks() {
     const wrap = $('progress-ticks');
@@ -980,29 +1335,198 @@
       wrap.appendChild(t);
     });
   }
-  function renderBookmarkList() {
-    const wrap = $('toc-bm');
+
+  // ---------- 左侧折叠菜单：书籍 + 批注/书签便签概览 ----------
+  function segOrder() {
+    const map = {};
+    document.querySelectorAll('#book-content .seg').forEach((s, i) => { map[s.id] = i; });
+    return map;
+  }
+  function renderRailBooks(names) {
+    const wrap = $('rail-books');
     if (!wrap) return;
     wrap.innerHTML = '';
-    const bms = loadJSON(bmKey(), []);
-    if (!bms.length) return;
-    const title = document.createElement('div');
-    title.className = 'toc-bm-title'; title.textContent = '书签';
-    wrap.appendChild(title);
-    bms.forEach(b => {
-      const el = document.getElementById(b.segId);
-      if (!el) return;
-      const item = document.createElement('div');
-      item.className = 'toc-bm-item';
-      const span = document.createElement('span');
-      span.textContent = (el.textContent || '').slice(0, 30) + '…';
-      span.addEventListener('click', () => el.scrollIntoView({ behavior: 'smooth', block: 'start' }));
-      const del = document.createElement('button'); del.textContent = '✕'; del.title = '删除书签';
-      del.addEventListener('click', () => toggleBookmark(el));
-      item.appendChild(span); item.appendChild(del);
-      wrap.appendChild(item);
+    if (!names || !names.length) { wrap.innerHTML = '<div class="rail-empty">还没有书，点上方「＋ 导入新书」</div>'; return; }
+    names.forEach(name => {
+      const el = document.createElement('div');
+      el.className = 'rail-book' + (name === currentBook ? ' active' : '');
+      const label = document.createElement('span');
+      label.className = 'rail-book-name';
+      label.textContent = name;
+      label.title = name;
+      const del = document.createElement('button');
+      del.className = 'rail-book-del';
+      del.title = '删除这本书';
+      del.innerHTML = icon('trash-2', 'sm');
+      del.addEventListener('click', async (e) => {
+        e.stopPropagation();
+        if (!confirm('确定删除《' + name + '》？本地索引、笔记、批注、书签、播客都会清空，不可恢复。')) return;
+        try {
+          const res = await fetch('/api/book/' + encodeURIComponent(name), { method: 'DELETE' });
+          const r = await res.json();
+          if (!r.ok) throw new Error(r.detail || '删除失败');
+          clearBookLocal(name);
+          const remaining = (await refreshBooks()).filter(n => n !== name);
+          if (name === currentBook) {
+            currentBook = '';
+            await loadBook(remaining[0] || '');
+          } else {
+            renderRailBooks(remaining);
+          }
+          toast('已删除《' + name + '》');
+        } catch (err) {
+          toast('删除失败：' + (err && err.message ? err.message : err));
+        }
+      });
+      el.appendChild(label);
+      el.appendChild(del);
+      el.addEventListener('click', () => { if (name !== currentBook) switchBook(name); });
+      wrap.appendChild(el);
     });
   }
+  function clearBookLocal(name) {
+    ['bt-bm', 'bt-annot', 'bt-progress', 'bt-hl'].forEach(k => {
+      try { localStorage.removeItem(k + ':' + name); } catch (e) {}
+    });
+  }
+  function fmtTime(ts) {
+    if (!ts) return '';
+    const d = new Date(ts);
+    const pad = n => String(n).padStart(2, '0');
+    const hm = pad(d.getHours()) + ':' + pad(d.getMinutes());
+    const now = new Date();
+    if (d.toDateString() === now.toDateString()) return hm;
+    if (d.getFullYear() === now.getFullYear()) return (d.getMonth() + 1) + '-' + pad(d.getDate()) + ' ' + hm;
+    return d.getFullYear() + '-' + (d.getMonth() + 1) + '-' + pad(d.getDate()) + ' ' + hm;
+  }
+  // 文档顺序位置：把 .heading + .seg 按出现顺序映射成 0..1 的轴坐标（目录作为参照）。
+  // 全书轴有几百个标题+几千个段落，滚动时每帧重算会卡，所以缓存；renderRailOverview 里失效重建。
+  let docPosCache = null;
+  function buildDocPos() {
+    if (docPosCache) return docPosCache;
+    const nodes = [...bookContent.querySelectorAll('.heading, .seg')];
+    const map = {};
+    const last = Math.max(nodes.length - 1, 1);
+    nodes.forEach((nd, i) => { map[nd.id] = i / last; });
+    docPosCache = map;
+    return map;
+  }
+  // 阅读轴 = 全书目录（像 Word 导航 / 论文目录那样列全，一点就跳），
+  // 有批注/书签的章节在章节名下挂卡片，绿色「你在此」标当前章。
+  function segHeadingEl(seg) {
+    let el = seg.previousElementSibling;
+    while (el) {
+      if (el.classList && el.classList.contains('heading')) return el;
+      el = el.previousElementSibling;
+    }
+    return null;
+  }
+  function appendRailMark(inner, it) {
+    const seg = document.getElementById(it.segId);
+    const pos = buildDocPos();
+    const text = it.kind === 'annot' ? (it.comment || '（无文字）') : ((seg.textContent || '').trim().slice(0, 60) || '（空段）');
+    const jump = () => {
+      seg.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      if (it.kind === 'annot') openAnnotView(seg);
+    };
+
+    const row = document.createElement('div');
+    row.className = 'rl-row';
+    row.dataset.pos = String(pos[it.segId] ?? 0);
+
+    const dot = document.createElement('div');
+    dot.className = 'rl-dot ' + it.kind;
+    dot.title = fmtTime(it.created) + ' ' + text;
+    const conn = document.createElement('div');
+    conn.className = 'rl-conn';
+
+    const card = document.createElement('div');
+    card.className = 'rail-card ' + it.kind;
+    card.innerHTML =
+      '<div class="rc-head"><span class="rc-kind">' + (it.kind === 'annot' ? '批注' : '书签') + '</span><span>' + esc(fmtTime(it.created)) + '</span></div>' +
+      '<div class="rc-text">' + esc(text) + '</div>' +
+      '<button class="rc-del" title="删除">' + icon('x', 'sm') + '</button>';
+    card.querySelector('.rc-del').addEventListener('click', (e) => {
+      e.stopPropagation();
+      if (it.kind === 'annot') deleteAnnotation(it.id); else toggleBookmark(seg);
+    });
+
+    row.appendChild(dot);
+    row.appendChild(conn);
+    row.appendChild(card);
+    row.addEventListener('click', (e) => { if (e.target.closest('.rc-del')) return; jump(); });
+    inner.appendChild(row);
+  }
+  function renderRailOverview() {
+    const overview = $('rail-overview');
+    if (!overview) return;
+    docPosCache = null;   // 全书结构可能变了（换书/重渲染），失效重建
+    overview.innerHTML = '';
+    const inner = document.createElement('div');
+    inner.className = 'rl-inner';
+    overview.appendChild(inner);
+
+    const pos = buildDocPos();
+    const annots = loadJSON(annotKey(), []).map(a => ({ ...a, kind: 'annot' }));
+    const bms = loadJSON(bmKey(), []).map(b => ({ ...b, kind: 'bm' }));
+    const marks = annots.concat(bms).filter(it => document.getElementById(it.segId));
+
+    // 标记按章节分组
+    const byChapter = new Map();   // headingId -> marks[]
+    marks.forEach(it => {
+      const h = segHeadingEl(document.getElementById(it.segId));
+      const key = h ? h.id : '__none__';
+      if (!byChapter.has(key)) byChapter.set(key, []);
+      byChapter.get(key).push(it);
+    });
+
+    const heads = [...bookContent.querySelectorAll('.heading')];
+    if (!heads.length && !marks.length) {
+      inner.innerHTML = '<div class="rail-empty">（本书没有检测到标题）</div>';
+      return;
+    }
+
+    // 正文开头（还没有任何标题）的标记，放最上面
+    if (byChapter.has('__none__')) byChapter.get('__none__').forEach(it => appendRailMark(inner, it));
+
+    // 全书目录列全：每个标题一行（可点跳），有标记的章节在下面挂卡片
+    heads.forEach(h => {
+      const ch = document.createElement('div');
+      ch.className = 'rl-ch' + (h.tagName === 'H2' ? ' hd-1' : '');
+      const chText = document.createElement('span');
+      chText.className = 'rl-ch-text';
+      chText.textContent = h.textContent.trim();
+      ch.appendChild(chText);
+      ch.title = h.textContent.trim();
+      ch.dataset.pos = String(pos[h.id] ?? 0);
+      ch.dataset.target = h.id;
+      ch.addEventListener('click', () => {
+        h.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        syncChapterActive(h.id);
+      });
+      inner.appendChild(ch);
+      (byChapter.get(h.id) || [])
+        .sort((a, b) => (pos[a.segId] ?? 0) - (pos[b.segId] ?? 0))
+        .forEach(it => appendRailMark(inner, it));
+    });
+
+    updateRailActive();
+  }
+
+  function setRailCollapsed(collapsed) {
+    $('rail').classList.toggle('collapsed', collapsed);
+    $('rail-toggle').innerHTML = icon(collapsed ? 'chevron-right' : 'chevron-left');
+  }
+  $('rail-toggle').addEventListener('click', () => setRailCollapsed(!$('rail').classList.contains('collapsed')));
+  $('rail-import').addEventListener('click', () => $('import-file').click());
+  $('mini-import').addEventListener('click', () => $('import-file').click());
+  $('mini-timeline').addEventListener('click', () => { setRailCollapsed(false); setTimeout(() => $('rail-overview').scrollIntoView({ behavior: 'smooth', block: 'center' }), 80); });
+  $('mini-podcast').addEventListener('click', () => {
+    if (!$('podcast-bar').classList.contains('show')) openPodcastBar();
+    $('podcast-library').classList.add('show');
+    loadPodcastLibrary();
+  });
+  $('mini-settings').addEventListener('click', openSettings);
 
   // ---------- 批注 ----------
   function annotKey() { return 'bt-annot:' + currentBook; }
@@ -1034,12 +1558,13 @@
       if (!tag) {
         tag = document.createElement('span');
         tag.className = 'annot-tag';
-        tag.textContent = '💬';
+        tag.innerHTML = icon('message-square', 'sm');
         tag.title = '查看批注';
         tag.addEventListener('click', (e) => { e.stopPropagation(); openAnnotView(seg); });
         seg.insertBefore(tag, seg.firstChild);
       }
     });
+    renderRailOverview();
   }
   function showAnnotPop(rect) {
     const p = $('annot-pop');
@@ -1062,7 +1587,7 @@
     const p = $('annot-pop');
     if (!annots.length) { hideAnnotPop(); return; }
     p.innerHTML = annots.map(a =>
-      '<div class="annot-item"><button class="a-del" title="删除">✕</button>' +
+      '<div class="annot-item"><button class="a-del" title="删除">' + icon('x', 'sm') + '</button>' +
       '<div class="a-exact">' + esc(a.exact || '') + '</div>' +
       '<div class="a-comment">' + esc(a.comment) + '</div></div>'
     ).join('') +
@@ -1172,7 +1697,7 @@
     const title = esc($('book-title').textContent || '这本书');
     messages.innerHTML =
       '<div class="welcome">' +
-        '<div class="welcome-title">你好，我是你的读书搭子 👋</div>' +
+        '<div class="welcome-title">你好，我是你的读书搭子</div>' +
         '<div class="welcome-sub">对着《' + title + '》随便问，我回到书里给你讲，还标出处。</div>' +
         '<div class="suggest"><div class="suggest-label">可以这样开始</div><div id="welcome-qs" class="suggest-list"><span class="muted"><span class="spinner"></span> 正在想几个开场问题…</span></div></div>' +
       '</div>';
@@ -1338,9 +1863,9 @@
       div.dataset.q = question || '';
       div.dataset.a = text || '';
       div.innerHTML = '<div class="msg-text">' + fmtAnswer(text || '') + '</div>' +
-        '<div class="msg-tools"><button class="follow-up">追问</button><button class="suggest-more">💡 追问灵感</button><button class="save-note">存为笔记</button><button class="read-aloud">🔊 朗读</button><button class="delete-msg">删除</button></div>';
+        '<div class="msg-tools"><button class="follow-up">追问</button><button class="suggest-more">追问灵感</button><button class="save-note">存为笔记</button><button class="read-aloud">朗读</button><button class="delete-msg">删除</button></div>';
     } else {
-      div.innerHTML = esc(text) + '<button class="delete-msg user-del" title="删除这条">✕</button>';
+      div.innerHTML = esc(text) + '<button class="delete-msg user-del" title="删除这条">' + icon('x', 'sm') + '</button>';
     }
     if (sources && sources.length) {
       div.dataset.sources = JSON.stringify(sources);
@@ -1496,7 +2021,7 @@
       const quote = (src && src.text) || '';
       let block = '### 问：' + q + '\n\n' + a;
       if (heading && heading !== '（无标题）') {
-        block += '\n\n> 📖 ' + heading + (quote ? '：「' + quote.replace(/\s+/g, ' ').slice(0, 120) + '」' : '');
+        block += '\n\n> ' + heading + (quote ? '：「' + quote.replace(/\s+/g, ' ').slice(0, 120) + '」' : '');
       }
       appendToNote(block);
     }
@@ -1652,7 +2177,7 @@
   }
   function updateReadBtns() {
     document.querySelectorAll('.read-aloud').forEach(b => {
-      b.textContent = (speaking && b === speakingEl) ? '⏹ 停' : '🔊 朗读';
+      b.textContent = (speaking && b === speakingEl) ? '停' : '朗读';
       b.classList.toggle('speaking', speaking && b === speakingEl);
     });
   }
@@ -1702,6 +2227,8 @@
   // ---------- 双人播客：读全书(免费) → 一次生成双人脚本 → 双音色合成 ----------
   let podcastBusy = false;
   let podcastScript = '';   // 当前正在播的脚本全文，插嘴时用来告诉主播「刚才播到哪」
+  let podcastFormat = 'deep';    // 生成弹窗选中的格式（deep/brief/critique/debate）
+  let podcastLen = 'medium';     // 生成弹窗选中的时长（short/medium/long）
   function setPodcastStatus(msg) { $('podcast-status').textContent = msg; }
   let podcastChaptersBook = '';
   function loadPodcastChapters() {
@@ -1711,8 +2238,9 @@
     fetch('/api/book/' + encodeURIComponent(currentBook) + '/headings')
       .then(r => r.json())
       .then(d => {
-        (d.headings || []).forEach(h => {
+        (d.headings || []).forEach((h, i) => {
           const lab = document.createElement('label');
+          lab.dataset.idx = i;
           const cb = document.createElement('input');
           cb.type = 'checkbox'; cb.value = h;
           lab.appendChild(cb);
@@ -1753,7 +2281,7 @@
           meta.className = 'pdl-meta';
           meta.textContent = (it.created || '') + (it.size ? (' · ' + Math.round(it.size / 1024) + 'KB') : '');
           const play = document.createElement('button');
-          play.textContent = '▶'; play.title = '播放';
+          play.className = 'pdl-play'; play.innerHTML = icon('play', 'sm'); play.title = '播放';
           play.onclick = () => {
             const a = $('podcast-audio');
             a.src = url; a.style.display = '';
@@ -1763,14 +2291,14 @@
             a.play().catch(() => {});
           };
           const dl = document.createElement('button');
-          dl.textContent = '⤓'; dl.title = '下载';
+          dl.className = 'pdl-icon'; dl.innerHTML = icon('download', 'sm'); dl.title = '下载';
           dl.onclick = () => {
             const a = document.createElement('a');
             a.href = url; a.download = (it.title || '播客') + '.mp3';
             document.body.appendChild(a); a.click(); a.remove();
           };
           const del = document.createElement('button');
-          del.textContent = '🗑'; del.title = '删除';
+          del.className = 'pdl-icon'; del.innerHTML = icon('trash-2', 'sm'); del.title = '删除';
           del.onclick = async () => { await fetch('/api/podcast/' + it.id, { method: 'DELETE' }); loadPodcastLibrary(); };
           row.appendChild(title); row.appendChild(meta); row.appendChild(play); row.appendChild(dl); row.appendChild(del);
           list.appendChild(row);
@@ -1780,22 +2308,23 @@
   }
   function openPodcastBar() {
     const bar = $('podcast-bar');
-    if (bar.classList.contains('show')) { bar.classList.remove('show'); $('podcast-options').classList.remove('show'); return; }
+    if (bar.classList.contains('show')) { bar.classList.remove('show'); $('podcast-options-overlay').classList.remove('show'); return; }
     bar.classList.add('show');
-    if (!$('podcast-audio').src) $('podcast-options').classList.add('show');
+    if (!$('podcast-audio').src) $('podcast-options-overlay').classList.add('show');
   }
   async function makePodcast() {
     if (podcastBusy) return;
     podcastBusy = true;
-    const len = $('podcast-len').value || 'medium';
-    const fmt = $('podcast-format').value || 'deep';
+    $('podcast-options-overlay').classList.remove('show');   // 生成时收起弹窗，露出底部播放条
+    const len = podcastLen;
+    const fmt = podcastFormat;
     const instructions = ($('podcast-instr').value || '').trim();
     const chapters = podcastChapters();
     $('podcast-audio').style.display = 'none';
     $('podcast-download').style.display = 'none';
     $('podcast-interrupt').style.display = 'none';
     $('podcast-auto').style.display = 'none';
-    disarmPodcastListen();
+    stopAutoListen();
     try {
       setPodcastStatus('① 写脚本…');
       const res = await fetch('/api/podcast?book=' + encodeURIComponent(currentBook), {
@@ -1836,25 +2365,21 @@
   function podcastInterrupt() {
     const main = $('podcast-audio');
     if (!main.src) { toast('先生成播客'); return; }
-    const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
-    if (!SR) { toast('语音插嘴需要 Chrome / Edge'); return; }
     main.pause();
-    disarmPodcastListen();   // 手动插嘴时停掉自动监听，避免两个麦克风同时开
+    stopAutoListen();   // 手动插嘴时停掉自动监听，避免两个麦克风同时开
     stopSpeak();
-    setPodcastStatus('你说，我听着…');
-    const r = new SR();
-    r.lang = 'zh-CN'; r.interimResults = false; r.continuous = false; r.maxAlternatives = 1;
-    let got = false;
-    r.onresult = (e) => {
-      let txt = '';
-      for (let i = 0; i < e.results.length; i++) txt += e.results[i][0].transcript;
-      txt = txt.trim();
-      if (txt) { got = true; podcastAnswer(txt, main); }
-    };
-    r.onend = () => { manualPodcastListening = false; refreshRecIndicator(); if (!got) { setPodcastStatus('没听清，继续播'); main.play().catch(() => {}); } };
-    r.onerror = () => { manualPodcastListening = false; refreshRecIndicator(); if (!got) { setPodcastStatus('没听清，继续播'); main.play().catch(() => {}); } };
-    try { r.start(); manualPodcastListening = true; refreshRecIndicator(); } catch (e) { setPodcastStatus('麦克风不可用'); main.play().catch(() => {}); return; }
-    setTimeout(() => { try { r.stop(); } catch (e) {} }, 12000);
+    setPodcastStatus('你说，我听着…（说完自动转写）');
+    (async () => {
+      try {
+        const blob = await startRecording('podcast');
+        setPodcastStatus('听到了，转写中…');
+        const text = await transcribe(blob);
+        if (text) podcastAnswer(text, main);
+        else { setPodcastStatus('没听清，继续播'); main.play().catch(() => {}); }
+      } catch (e) {
+        setPodcastStatus('麦克风不可用，继续播'); main.play().catch(() => {});
+      }
+    })();
   }
   function _podcastTurns(script) {
     const turns = [];
@@ -1996,176 +2521,183 @@
     }
   }
 
-  // ---------- 全程插嘴（自动监听）：播客播放时保持「听」循环，一开口就暂停并回答 ----------
+  // ---------- 本地语音：录音（MediaRecorder）→ 本地 Whisper 转写（/api/stt） ----------
+  // 不依赖 Chrome SpeechRecognition（它走 Google 服务器，部分地区连不上会一直卡在「正在听」）。
+  let micStream = null, audioCtx = null, analyser = null;
+  let mediaRec = null, recChunks = [], recMonTimer = null, recMaxTimer = null;
+  let recHeard = false, recSilenceMs = 0, recTarget = 'chat';
   let podcastAutoOn = false;      // 用户是否开了「自动插嘴」
-  let podcastListening = false;   // 当前是否有一个听写循环在跑
-  let podRec = null;
-  let micOn = false;              // 聊天 🎤 是否在听
-  let manualPodcastListening = false;  // 手动插嘴的临时监听
-  function refreshRecIndicator() {
-    // 汇总所有麦克风状态：只要有一个在录音，右上角就亮「录音中」（对标 macOS 菜单栏橙色录音灯）
-    const on = micOn || podcastListening || manualPodcastListening;
-    $('rec-indicator').classList.toggle('on', on);
+  let autoMonTimer = null;        // 自动插嘴的能量监听循环
+  const SPEECH_LEVEL = 0.035;     // 有声音的能量阈值
+  const SILENCE_END_MS = 1500;    // 连续静音这么久判定「说完了」
+  const MAX_REC_MS = 20000;       // 最长录音兜底
+  const MIC_HINT = '问这本书任何问题，回车发送（Shift+回车换行）';
+
+  async function ensureMic() {
+    if (micStream) return micStream;
+    micStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    const src = audioCtx.createMediaStreamSource(micStream);
+    analyser = audioCtx.createAnalyser();
+    analyser.fftSize = 512;
+    src.connect(analyser);
+    return micStream;
   }
+  function currentLevel() {
+    if (!analyser) return 0;
+    const buf = new Uint8Array(analyser.frequencyBinCount);
+    analyser.getByteTimeDomainData(buf);
+    let sum = 0;
+    for (let i = 0; i < buf.length; i++) { const v = (buf[i] - 128) / 128; sum += v * v; }
+    return Math.sqrt(sum / buf.length);
+  }
+  function pickMime() {
+    if (window.MediaRecorder && MediaRecorder.isTypeSupported('audio/webm;codecs=opus')) return 'audio/webm;codecs=opus';
+    if (window.MediaRecorder && MediaRecorder.isTypeSupported('audio/webm')) return 'audio/webm';
+    return '';
+  }
+  function isRecording() { return !!(mediaRec && mediaRec.state === 'recording'); }
+  function clearRecTimers() {
+    if (recMonTimer) { clearInterval(recMonTimer); recMonTimer = null; }
+    if (recMaxTimer) { clearTimeout(recMaxTimer); recMaxTimer = null; }
+  }
+  function stopRecording() {
+    if (mediaRec && mediaRec.state !== 'inactive') { try { mediaRec.stop(); } catch (e) {} }
+  }
+  function setMicState(state) {
+    const b = $('mic');
+    b.classList.remove('listening', 'heard', 'transcribing');
+    if (state === 'listening') b.classList.add('listening');
+    else if (state === 'heard') b.classList.add('heard');
+    else if (state === 'transcribing') b.classList.add('transcribing');
+    const track = $('mic-level-track');
+    if (track) track.style.display = (state === 'listening' || state === 'heard') ? '' : 'none';
+  }
+  function onMicLevel(lvl) {
+    const meter = $('mic-level');
+    if (meter) meter.style.width = Math.round(Math.min(1, lvl * 6) * 100) + '%';
+  }
+  function onMicHeard() {
+    if (recTarget === 'chat') setMicState('heard');
+    else setPodcastStatus('听到了 · 继续说…');
+  }
+  // 开始录音：静音自动停，resolve 成音频 Blob；出错 reject 成中文提示
+  function startRecording(target) {
+    return new Promise(async (resolve, reject) => {
+      try { await ensureMic(); } catch (e) { reject('麦克风不可用'); return; }
+      recChunks = []; recHeard = false; recSilenceMs = 0; recTarget = target;
+      const mime = pickMime();
+      mediaRec = new MediaRecorder(micStream, mime ? { mimeType: mime } : undefined);
+      mediaRec.ondataavailable = (e) => { if (e.data && e.data.size) recChunks.push(e.data); };
+      mediaRec.onstop = () => {
+        clearRecTimers();
+        const blob = new Blob(recChunks, { type: mediaRec.mimeType || 'audio/webm' });
+        mediaRec = null;
+        resolve(blob);
+      };
+      try { mediaRec.start(200); } catch (e) { mediaRec = null; reject('录音启动失败'); return; }
+      recMonTimer = setInterval(() => {
+        const lvl = currentLevel();
+        onMicLevel(lvl);
+        if (lvl >= SPEECH_LEVEL) {
+          if (!recHeard) { recHeard = true; onMicHeard(); }
+          recSilenceMs = 0;
+        } else if (recHeard) {
+          recSilenceMs += 200;
+          if (recSilenceMs >= SILENCE_END_MS) stopRecording();
+        }
+      }, 200);
+      recMaxTimer = setTimeout(() => stopRecording(), MAX_REC_MS);
+    });
+  }
+  async function transcribe(blob) {
+    const res = await fetch('/api/stt', { method: 'POST', headers: { 'Content-Type': blob.type || 'audio/webm' }, body: blob });
+    const data = await res.json();
+    if (!data.ok) throw new Error(data.error || '语音识别失败');
+    return (data.text || '').trim();
+  }
+  function micHint(msg) {
+    input.placeholder = msg + '，再点一次麦克风试试';
+    setTimeout(() => { input.placeholder = MIC_HINT; }, 4000);
+  }
+
+  // 聊天：点一下开始收音，说完自动停 → 本地转写 → 发送
+  $('mic').addEventListener('click', async () => {
+    if (isRecording()) { stopRecording(); return; }   // 再点 = 手动停
+    stopSpeak();
+    setMicState('listening');
+    micHint('收音中，说完了我会自动停…');
+    try {
+      const blob = await startRecording('chat');
+      setMicState('transcribing');
+      micHint('听到了，转写中…');
+      const text = await transcribe(blob);
+      setMicState('idle');
+      if (text) { input.value = text; resizeInput(); ask(input.value); }
+      else micHint('没听清');
+    } catch (e) {
+      setMicState('idle');
+      micHint(e && e.message ? e.message : '语音识别失败');
+    }
+  });
+
+  // ---------- 播客自动插嘴：播放时保持「能量监听」，一开口就暂停并回答 ----------
   function podcastPlaying() {
     const a = $('podcast-audio');
     return !!a.src && !a.paused;
   }
-  function disarmPodcastListen() {
-    podcastListening = false;
-    if (podRec) { try { podRec.onresult = podRec.onend = podRec.onerror = null; podRec.stop(); } catch (e) {} podRec = null; }
-    refreshRecIndicator();
+  function stopAutoListen() {
+    if (autoMonTimer) { clearInterval(autoMonTimer); autoMonTimer = null; }
+    if (recTarget === 'podcast-auto' && isRecording()) stopRecording();
   }
-  function armPodcastListen() {
-    const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
-    if (!SR || !podcastAutoOn || !podcastPlaying() || podcastListening) return;
-    const main = $('podcast-audio');
-    const r = new SR();
-    podRec = r;
-    podcastListening = true;
-    refreshRecIndicator();
-    r.lang = 'zh-CN'; r.interimResults = true; r.continuous = false; r.maxAlternatives = 1;
-    let heard = false, text = '';
-    r.onresult = (e) => {
-      let final = '', interim = '';
-      for (let i = e.resultIndex; i < e.results.length; i++) {
-        const rr = e.results[i];
-        if (rr.isFinal) final += rr[0].transcript; else interim += rr[0].transcript;
+  async function armAutoListen() {
+    if (!podcastAutoOn || !podcastPlaying() || autoMonTimer || isRecording()) return;
+    try { await ensureMic(); } catch (e) { setPodcastAuto(false); toast('麦克风不可用，自动插嘴已关闭'); return; }
+    autoMonTimer = setInterval(async () => {
+      if (!podcastAutoOn || !podcastPlaying()) { stopAutoListen(); return; }
+      if (currentLevel() >= SPEECH_LEVEL) {
+        stopAutoListen();
+        const main = $('podcast-audio');
+        main.pause();
+        setPodcastStatus('听到了，主播准备接…');
+        try {
+          const blob = await startRecording('podcast-auto');
+          setPodcastStatus('转写中…');
+          const text = await transcribe(blob);
+          if (text) podcastAnswer(text, main);   // 回答完 resumePodcast → play 事件 → 重新 arm
+          else resumePodcast(main, 0);
+        } catch (e) { resumePodcast(main, 0); }
       }
-      const t = (final || interim).trim();
-      if (t) {
-        if (!heard) { heard = true; main.pause(); setPodcastStatus('听到了，主播准备接…'); }
-        text = t;
-      }
-    };
-    r.onend = () => {
-      podcastListening = false; podRec = null;
-      refreshRecIndicator();
-      if (heard && text) {
-        podcastAnswer(text, main);               // 回答完 resumePodcast 会重新武装
-      } else if (podcastAutoOn && podcastPlaying()) {
-        armPodcastListen();                       // 没听到就继续听
-      }
-    };
-    r.onerror = (e) => {
-      const code = e && e.error;
-      if (code === 'not-allowed' || code === 'service-not-allowed') {
-        setPodcastAuto(false);
-        toast('麦克风权限被拒，自动插嘴已关闭');
-      } else if (code !== 'no-speech' && code !== 'aborted') {
-        setPodcastAuto(false);                    // network 等：停掉，别无限重试
-        micHint(sttErrText(code));
-      }
-      // no-speech / aborted 不在这里重新武装：onend 一定会紧随其后触发，交给它统一处理，避免重复监听
-    };
-    try { r.start(); } catch (e) { podcastListening = false; podRec = null; refreshRecIndicator(); }
+    }, 200);
   }
   function setPodcastAuto(on) {
     podcastAutoOn = on;
     const b = $('podcast-auto');
     b.classList.toggle('on', on);
-    b.textContent = on ? '🎧 自动插嘴中' : '🎧 自动插嘴';
-    if (on) { armPodcastListen(); } else { disarmPodcastListen(); }
+    b.innerHTML = icon('headphones') + ' ' + (on ? '自动插嘴中' : '自动插嘴');
+    if (on) armAutoListen(); else stopAutoListen();
   }
-
-  // 听写（STT）：点麦克风 = 随时插嘴 —— 立刻打断 AI 讲话，说完自动发送
-  let rec = null;
-  let sttWatchdog = null;
-  let lastInterim = '';
-  const MIC_HINT = '问这本书任何问题，回车发送（Shift+回车换行）';
-  function sttErrText(code) {
-    const map = {
-      'no-speech': '没听到声音',
-      'not-allowed': '麦克风权限被拒',
-      'audio-capture': '找不到麦克风',
-      'network': '语音识别服务连不上（需联网）',
-      'aborted': '已取消',
-      'language-not-supported': '不支持这个语言',
-      'service-not-allowed': '浏览器不让用语音识别',
-    };
-    return map[code] || ('语音识别出错：' + code);
-  }
-  function micHint(msg) {
-    input.placeholder = msg + '，再点一次 🎤 试试';
-    setTimeout(() => { input.placeholder = MIC_HINT; }, 4000);
-  }
-  function clearWatchdog() { if (sttWatchdog) { clearTimeout(sttWatchdog); sttWatchdog = null; } }
-  function initSpeech() {
-    const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
-    if (!SR) { $('mic').style.display = 'none'; return; }
-    try {
-      rec = new SR();
-      rec.lang = 'zh-CN';
-      rec.interimResults = true;
-      rec.continuous = false;   // 静默后自动结束
-      rec.maxAlternatives = 1;
-      rec.onresult = (e) => {
-        let finalText = '', interim = '';
-        for (let i = e.resultIndex; i < e.results.length; i++) {
-          const r = e.results[i];
-          if (r.isFinal) finalText += r[0].transcript; else interim += r[0].transcript;
-        }
-        lastInterim = (finalText || interim).trim();
-        input.value = lastInterim;
-        resizeInput();
-        if (finalText.trim()) {
-          clearWatchdog();
-          setMic(false);
-          input.value = finalText.trim();
-          resizeInput();
-          ask(input.value);
-        }
-      };
-      rec.onend = () => {
-        clearWatchdog();
-        if (lastInterim && $('mic').classList.contains('listening')) {
-          // 识别结束了但没拿到「最终结果」：用最后听到的临时文本发送，别浪费这句话
-          setMic(false);
-          input.value = lastInterim;
-          resizeInput();
-          ask(input.value);
-        } else {
-          setMic(false);
-        }
-      };
-      rec.onerror = (e) => {
-        clearWatchdog();
-        setMic(false);
-        micHint(sttErrText(e && e.error));
-      };
-    } catch (e) { $('mic').style.display = 'none'; }
-  }
-  function setMic(on) {
-    const b = $('mic');
-    b.classList.toggle('listening', on);
-    b.textContent = on ? '🔴' : '🎤';
-    micOn = on;
-    refreshRecIndicator();
-  }
-  $('mic').addEventListener('click', () => {
-    if (!rec) return;
-    if ($('mic').classList.contains('listening')) { clearWatchdog(); try { rec.stop(); } catch (e) {} setMic(false); return; }
-    stopSpeak();                          // 插嘴：打断
-    lastInterim = '';
-    input.value = '';
-    try {
-      rec.start();
-      setMic(true);
-      clearWatchdog();
-      sttWatchdog = setTimeout(() => {    // 兜底：10 秒还没结束就强制停，别让红点一直挂着
-        if ($('mic').classList.contains('listening')) {
-          try { rec.stop(); } catch (e) {}
-          setMic(false);
-          micHint('没听清（超时）');
-        }
-      }, 10000);
-    } catch (e) { setMic(false); micHint(sttErrText('audio-capture')); }
-  });
   $('podcast').addEventListener('click', openPodcastBar);
   $('podcast-make').addEventListener('click', makePodcast);
-  $('podcast-options-btn').addEventListener('click', () => $('podcast-options').classList.toggle('show'));
-  $('podcast-lib-btn').addEventListener('click', () => { $('podcast-library').classList.toggle('show'); loadPodcastLibrary(); });
+  $('podcast-more').addEventListener('click', () => $('podcast-more-menu').classList.toggle('show'));
+  $('podcast-options-btn').addEventListener('click', () => { $('podcast-options-overlay').classList.toggle('show'); $('podcast-more-menu').classList.remove('show'); });
+  $('podcast-lib-btn').addEventListener('click', () => { $('podcast-library').classList.toggle('show'); loadPodcastLibrary(); $('podcast-more-menu').classList.remove('show'); });
   $('podcast-lib-refresh').addEventListener('click', loadPodcastLibrary);
+  // 生成弹窗：格式卡片 + 时长分段 + 关闭
+  document.querySelectorAll('#podcast-options .pf-card').forEach(c => {
+    c.addEventListener('click', () => {
+      podcastFormat = c.dataset.fmt;
+      document.querySelectorAll('#podcast-options .pf-card').forEach(x => x.classList.toggle('sel', x === c));
+    });
+  });
+  document.querySelectorAll('#podcast-len-group button').forEach(b => {
+    b.addEventListener('click', () => {
+      podcastLen = b.dataset.len;
+      document.querySelectorAll('#podcast-len-group button').forEach(x => x.classList.toggle('sel', x === b));
+    });
+  });
+  $('podcast-options-close').addEventListener('click', () => $('podcast-options-overlay').classList.remove('show'));
+  $('podcast-options-overlay').addEventListener('mousedown', (e) => { if (e.target === $('podcast-options-overlay')) $('podcast-options-overlay').classList.remove('show'); });
   $('podcast-ch-toggle').addEventListener('click', () => {
     const w = $('podcast-ch-wrap');
     w.style.display = w.style.display === 'none' ? '' : 'none';
@@ -2176,16 +2708,74 @@
     updatePodcastChCount();
   });
   $('podcast-ch-list').addEventListener('change', updatePodcastChCount);
+
+  // ---------- 播客选篇章：长按 300ms 进入拖选，向下拖过的一串章节跟随起始项状态 ----------
+  let podcastDrag = null;        // { startIdx, toState, active }
+  let suppressChClick = false;   // 拖选结束后的那次 click 要吞掉，避免把起始项又翻回去
+  const PODCAST_DRAG_DELAY = 300;
+  function podcastChLabels() { return Array.from($('podcast-ch-list').querySelectorAll('label')); }
+  $('podcast-ch-list').addEventListener('pointerdown', (e) => {
+    if (e.button !== undefined && e.button !== 0) return;   // 只响应左键
+    const startLab = e.target.closest ? e.target.closest('label') : null;
+    if (!startLab) return;
+    const startIdx = Number(startLab.dataset.idx);
+    let entered = false;
+    const timer = setTimeout(() => {
+      entered = true;
+      const cb = startLab.querySelector('input');
+      const toState = !cb.checked;
+      cb.checked = toState;
+      podcastDrag = { startIdx, toState, active: true };
+      suppressChClick = true;
+      $('podcast-ch-list').classList.add('drag-sel');
+      try { $('podcast-ch-list').setPointerCapture(e.pointerId); } catch (err) {}
+    }, PODCAST_DRAG_DELAY);
+
+    const onMove = (ev) => {
+      if (!entered || !podcastDrag) return;
+      const el = document.elementFromPoint(ev.clientX, ev.clientY);
+      const hit = el && el.closest ? el.closest('#podcast-ch-list label') : null;
+      if (!hit) return;
+      const hi = Number(hit.dataset.idx);
+      const lo = Math.min(podcastDrag.startIdx, hi), top = Math.max(podcastDrag.startIdx, hi);
+      podcastChLabels().forEach((l, i) => {
+        if (i >= lo && i <= top) l.querySelector('input').checked = podcastDrag.toState;
+      });
+    };
+    const onUp = () => {
+      clearTimeout(timer);
+      if (entered && podcastDrag) {
+        podcastDrag = null;
+        $('podcast-ch-list').classList.remove('drag-sel');
+        try { $('podcast-ch-list').releasePointerCapture(e.pointerId); } catch (err) {}
+        updatePodcastChCount();
+        setTimeout(() => { suppressChClick = false; }, 0);   // 兜底：万一没触发 click 也清掉
+      }
+      $('podcast-ch-list').removeEventListener('pointermove', onMove);
+      $('podcast-ch-list').removeEventListener('pointerup', onUp);
+      $('podcast-ch-list').removeEventListener('pointercancel', onUp);
+    };
+    $('podcast-ch-list').addEventListener('pointermove', onMove);
+    $('podcast-ch-list').addEventListener('pointerup', onUp);
+    $('podcast-ch-list').addEventListener('pointercancel', onUp);
+  });
+  // 拖选结束那次 click（浏览器默认勾选）要吞掉：我们已在拖选里手动设了 checkbox
+  $('podcast-ch-list').addEventListener('click', (e) => {
+    if (!suppressChClick) return;
+    suppressChClick = false;
+    e.preventDefault();
+  }, true);
   $('podcast-interrupt').addEventListener('click', podcastInterrupt);
   $('podcast-auto').addEventListener('click', () => setPodcastAuto(!podcastAutoOn));
-  $('podcast-audio').addEventListener('play', () => { if (podcastAutoOn) armPodcastListen(); });
-  $('podcast-audio').addEventListener('ended', () => { disarmPodcastListen(); });
+  $('podcast-audio').addEventListener('play', () => { if (podcastAutoOn) armAutoListen(); });
+  $('podcast-audio').addEventListener('ended', () => { stopAutoListen(); });
   $('podcast-close').addEventListener('click', () => {
     $('podcast-audio').pause();
-    disarmPodcastListen();
+    stopAutoListen();
     $('podcast-bar').classList.remove('show');
-    $('podcast-options').classList.remove('show');
+    $('podcast-options-overlay').classList.remove('show');
     $('podcast-library').classList.remove('show');
+    $('podcast-more-menu').classList.remove('show');
   });
 
 
@@ -2319,12 +2909,12 @@
       if (vditor) vditor.setValue(noteContent);
       updateNoteCount();
       await saveNotes(false);
-      btn.textContent = '↩️ 撤销整理';
+      btn.innerHTML = icon('history') + ' 撤销整理';
       btn.dataset.undo = '1';
       $('notes-status').textContent = '已整理（可撤销）';
       setTimeout(() => { $('notes-status').textContent = ''; }, 4000);
     } catch (e) {
-      btn.textContent = '✨ 自动整理';
+      btn.innerHTML = icon('sparkles') + ' 自动整理';
       $('notes-status').textContent = '整理失败：' + e.message;
       setTimeout(() => { $('notes-status').textContent = ''; }, 4000);
     } finally {
@@ -2340,7 +2930,7 @@
       saveNotes(false);
       preOrganize = '';
       btn.dataset.undo = '';
-      btn.textContent = '✨ 自动整理';
+      btn.innerHTML = icon('sparkles') + ' 自动整理';
       $('notes-status').textContent = '已撤销';
       setTimeout(() => { $('notes-status').textContent = ''; }, 1500);
       return;
@@ -2352,6 +2942,7 @@
   let guideSections = [];     // 每段 = 一个标题 + 其下若干段
   let guideIdx = -1;          // 当前读到第几段
   let guideQuestion = '';     // 「考考我」出的问题，提交答案时带回给 AI 评价
+  let guideSummaryCache = {}; // 每段的总结缓存（key=标题/首段 id），回退不重复调 API
 
   function buildSections() {
     const sections = [];
@@ -2406,14 +2997,15 @@
   // 读完一段的轻庆祝：撒花（无依赖）+ 一句提醒
   function celebrate() {
     const host = $('sidebar');
-    const emojis = ['🎉', '✨', '🌸', '🎊', '💫', '⭐'];
+    const colors = ['#0071e3', '#e8a33d', '#34c759', '#ff6b6b', '#a78bfa', '#f5a623'];
     for (let i = 0; i < 22; i++) {
       const s = document.createElement('span');
       s.className = 'confetti';
-      s.textContent = emojis[Math.floor(Math.random() * emojis.length)];
+      s.style.background = colors[Math.floor(Math.random() * colors.length)];
       s.style.left = (8 + Math.random() * 82) + '%';
       s.style.animationDelay = (Math.random() * 0.4) + 's';
-      s.style.fontSize = (14 + Math.random() * 18) + 'px';
+      const sz = (8 + Math.random() * 12) + 'px';
+      s.style.width = sz; s.style.height = sz;
       host.appendChild(s);
       setTimeout(() => s.remove(), 2600);
     }
@@ -2427,16 +3019,40 @@
     toastTimer = setTimeout(() => { t.style.display = 'none'; }, 2800);
   }
 
+  function guideCacheKey(s) {
+    return s.heading || (s.segs[0] && s.segs[0].id) || ('sec' + guideIdx);
+  }
+  async function renderGuideSummary(s) {
+    const preview = $('guide-chunk-preview');
+    const key = guideCacheKey(s);
+    if (guideSummaryCache[key]) { preview.innerHTML = fmtAnswer(guideSummaryCache[key]); return; }
+    preview.innerHTML = '<span class="guide-thinking">正在总结这一段…</span>';
+    try {
+      const text = await guideStream({
+        context: s.text, heading: s.heading, mode: 'summarize',
+        persona: $('persona-select').value || 'default', book: currentBook
+      }, preview);
+      if (text.trim()) guideSummaryCache[key] = text;
+    } catch (e) {
+      preview.innerHTML = '<span class="muted">总结失败：' + esc(e) + '</span>';
+    }
+  }
   function renderGuideChunk() {
     const s = currentSection();
     if (!s) { $('guide-body').innerHTML = '<div class="guide-thinking">这本书还没有可读内容</div>'; return; }
     $('guide-title').textContent = '跟着读 · 第 ' + (guideIdx + 1) + ' 段';
     $('guide-chunk-heading').textContent = s.heading || '（未分章）';
-    $('guide-chunk-preview').textContent = s.preview;
     $('guide-body').innerHTML = '';
     hideGuideAnswer();
     guideQuestion = '';
     highlightCurrent();
+    const src = $('guide-chunk-src');
+    src.textContent = s.text;
+    src.style.display = 'none';
+    const srcToggle = $('guide-src-toggle');
+    srcToggle.textContent = '看原文';
+    srcToggle.style.display = '';
+    renderGuideSummary(s);
     (s.headingEl || s.segs[0]).scrollIntoView({ behavior: 'smooth', block: 'start' });
   }
 
@@ -2507,6 +3123,8 @@
     $('guide-title').textContent = '复盘';
     $('guide-chunk-heading').textContent = '我读到哪了？';
     $('guide-chunk-preview').textContent = '';
+    $('guide-src-toggle').style.display = 'none';
+    $('guide-chunk-src').style.display = 'none';
     bodyEl.innerHTML = '<div class="guide-thinking">在回想你读到哪了…</div>';
     try {
       const s = coverageStats();
@@ -2536,6 +3154,12 @@
   $('guide-open').addEventListener('click', () => openGuide('chunk'));
   $('guide-recap-btn').addEventListener('click', () => openGuide('recap'));
   $('guide-close').addEventListener('click', closeGuide);
+  $('guide-src-toggle').addEventListener('click', () => {
+    const src = $('guide-chunk-src');
+    const show = src.style.display === 'none';
+    src.style.display = show ? '' : 'none';
+    $('guide-src-toggle').textContent = show ? '收起原文' : '看原文';
+  });
   $('guide-hl-toggle').addEventListener('click', () => {
     guideHl = !guideHl;
     saveJSON('bt-guide-hl', guideHl);
@@ -2545,7 +3169,7 @@
   });
   $('guide-next').addEventListener('click', () => {
     celebrate();
-    toast('读完这一段啦 🎉 要不要聊聊 / 考考我？');
+    toast('读完这一段啦，要不要聊聊 / 考考我？');
     guideIdx++;
     renderGuideChunk();
   });
@@ -2595,9 +3219,13 @@
   document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeSettings(); });
 
   // ---------- 启动 ----------
+  decorateIcons();
   initTheme();
+  applyReading();
   $('key-toggle').classList.toggle('on', keyOn);
-  initSpeech();
+  attachDockMagnify($('progress-ticks'), '.bm-tick');
+  attachDockMagnify($('rail-overview'), '.rl-ch, .rail-card', { axis: 'y', maxScale: 1.18, radius: 150 });
+  setRailCollapsed(false);
   loadPersonas();
   loadBook();
   loadSession();
